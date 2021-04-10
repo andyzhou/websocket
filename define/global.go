@@ -2,6 +2,7 @@ package define
 
 //inter param
 const (
+	FileParaName = "file"
 	ChannelParaName = "channel"
 )
 

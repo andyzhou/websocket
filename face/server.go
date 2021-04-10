@@ -6,19 +6,23 @@ import (
 	"github.com/andyzhou/websocket/iface"
 	"github.com/gorilla/mux"
 	"golang.org/x/net/websocket"
+	"io/ioutil"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 )
 
 /*
- * face of server, implement of IServer
+ * face of web socket server, implement of IWServer
  */
 
 //face info
 type Server struct {
 	port int
 	address string //host:port
+	staticPath string
 	hsm *http.ServeMux
 	router *mux.Router
 	routerMap *sync.Map //channel -> IRouter
@@ -27,7 +31,7 @@ type Server struct {
 }
 
 //construct
-func NewServer(port int) *Server {
+func NewWServer(port int) *Server {
 	//self init
 	this := &Server{
 		port: port,
@@ -86,6 +90,11 @@ func (f *Server) GetRouter(channel string) iface.IRouter {
 	return f.getRouter(channel)
 }
 
+//set static root path
+func (f *Server) SetStaticPath(staticPath string) {
+	f.staticPath = staticPath
+}
+
 //register web sock¡et router
 func (f *Server) RegisterWSRouter(
 						subUrl string,
@@ -129,9 +138,63 @@ func (f *Server) RegisterHttpRouter(
 	return true
 }
 
+//register http static router
+func (f *Server) RegisterStaticRouter(subUrl string) bool {
+	//basic check
+	if subUrl == "" {
+		return false
+	}
+
+	//static file
+	f.router.HandleFunc(subUrl, f.interStaticFileRouter).Methods(define.RouterMethodOfGet)
+
+	return true
+}
+
 /////////////////
 //private func
 /////////////////
+
+//inter static file router
+func (f *Server) interStaticFileRouter(
+					w http.ResponseWriter,
+					r *http.Request,
+				) {
+	//get static file name
+	params := mux.Vars(r)
+	fileName, ok := params[define.FileParaName]
+	if !ok {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	//get root path
+	rootPath, _ := os.Getwd()
+	staticFile := fmt.Sprintf("%s/%s/%s", rootPath, f.staticPath, fileName)
+
+	//read file
+	byteData, err := ioutil.ReadFile(staticFile)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	fileType := http.DetectContentType(byteData)
+
+	//set access control
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	isJs := strings.HasSuffix(staticFile, ".js")
+	if isJs {
+		//set http header
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	}else{
+		//set http header
+		w.Header().Set("Content-Type", fileType)
+	}
+
+	w.Write(byteData)
+}
 
 //check or create router
 func (f *Server) createRouter(
