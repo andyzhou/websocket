@@ -3,20 +3,24 @@ package main
 import (
 	"fmt"
 	"github.com/andyzhou/websocket"
-	"github.com/andyzhou/websocket/define"
 	"net/http"
 	"sync"
 )
 
 const (
 	serverPort = 7200
-	reqUrlOfRoot = "/"
+	reqUrlOfRoot = "/{page}"
 	reqUrlOfFile = "/file/{file}"
 	reqUrlOfChat = "/chat/{channel}"
 	channel = "test"
 	staticPath = "html"
+	tplPath = "tpl"
 )
 
+//global tpl files
+var globalTplFiles = []string {
+	"header.tpl",
+}
 
 func main() {
 	var wg sync.WaitGroup
@@ -30,8 +34,14 @@ func main() {
 	//set static root path
 	ws.SetStaticPath(staticPath)
 
-	//register handler for http router
-	ws.RegisterHttpRouter(reqUrlOfRoot, rootHandler, define.RouterMethodOfGet)
+	//set tpl root path
+	ws.SetTplPath(tplPath)
+
+	//set global tpl files
+	ws.SetGlobalTplFile(globalTplFiles...)
+
+	//register handler for page router
+	ws.RegisterPageRouter(reqUrlOfRoot)
 
 	//register handler for static router
 	ws.RegisterStaticRouter(reqUrlOfFile)
@@ -42,11 +52,11 @@ func main() {
 
 	//start server
 	wg.Add(1)
-	fmt.Println("start server..")
+	fmt.Println("start example server..")
 	server.Start()
 
 	wg.Wait()
-	fmt.Println("stop server..")
+	fmt.Println("stop example server..")
 	server.Quit()
 }
 
@@ -58,6 +68,4 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-
-
 }

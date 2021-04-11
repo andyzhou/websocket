@@ -22,7 +22,9 @@ import (
 type Server struct {
 	port int
 	address string //host:port
-	staticPath string
+	staticPath string //static root path
+	tplPath string //tpl root path
+	globalTplFiles []string
 	hsm *http.ServeMux
 	router *mux.Router
 	routerMap *sync.Map //channel -> IRouter
@@ -39,6 +41,7 @@ func NewWServer(port int) *Server {
 		hsm: http.NewServeMux(),
 		router: mux.NewRouter(),
 		routerMap: new(sync.Map),
+		globalTplFiles: make([]string, 0),
 	}
 	return this
 }
@@ -95,6 +98,24 @@ func (f *Server) SetStaticPath(staticPath string) {
 	f.staticPath = staticPath
 }
 
+//set tpl root path
+func (f *Server) SetTplPath(tplPath string) {
+	f.tplPath = tplPath
+}
+
+//set global tpl file
+func (f *Server) SetGlobalTplFile(tplFile ... string) bool {
+	//basic check
+	if tplFile == nil || len(tplFile) <= 0 {
+		return false
+	}
+
+	//reset global tpl files
+	f.globalTplFiles = make([]string, 0)
+	f.globalTplFiles = append(f.globalTplFiles, tplFile...)
+	return true
+}
+
 //register web sock¡et router
 func (f *Server) RegisterWSRouter(
 						subUrl string,
@@ -138,6 +159,19 @@ func (f *Server) RegisterHttpRouter(
 	return true
 }
 
+//register http page router
+func (f *Server) RegisterPageRouter(subUrl string) bool  {
+	//basic check
+	if subUrl == "" {
+		return false
+	}
+
+	//page router
+	f.router.HandleFunc(subUrl, f.interTplPageRouter).Methods(define.RouterMethodOfGet)
+
+	return true
+}
+
 //register http static router
 func (f *Server) RegisterStaticRouter(subUrl string) bool {
 	//basic check
@@ -154,6 +188,56 @@ func (f *Server) RegisterStaticRouter(subUrl string) bool {
 /////////////////
 //private func
 /////////////////
+
+//inter tpl page router
+func (f *Server) interTplPageRouter(
+					w http.ResponseWriter,
+					r *http.Request,
+				) {
+	//get page file name
+	params := mux.Vars(r)
+	pageName, ok := params[define.PageParaName]
+	if !ok {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	//init main tpl file
+	mainTplFile := fmt.Sprintf("%s%s", pageName, define.TplFileExtName)
+
+	//check tpl root path
+	if f.tplPath == "" {
+		//get root path
+		rootPath, _ := os.Getwd()
+		f.tplPath = rootPath
+	}
+
+	//init tpl full root path
+	rootPath, _ := os.Getwd()
+	tplRootPath := fmt.Sprintf("%s/%s", rootPath, f.tplPath)
+
+	//check main tpl is exist or not
+	mainTplPath := fmt.Sprintf("%s/%s", tplRootPath, mainTplFile)
+	isExists := f.checkFileIsExists(mainTplPath)
+	if !isExists {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	//init tpl instance
+	tpl := NewTpl(tplRootPath)
+
+	//add global tpl
+	if f.globalTplFiles != nil {
+		tpl.AddTpl(f.globalTplFiles...)
+	}
+
+	//add main tpl
+	tpl.AddTpl(mainTplFile)
+
+	//execute tpl
+	tpl.Execute(mainTplFile, nil, w, r)
+}
 
 //inter static file router
 func (f *Server) interStaticFileRouter(
@@ -194,6 +278,18 @@ func (f *Server) interStaticFileRouter(
 	}
 
 	w.Write(byteData)
+}
+
+//check file exist or not
+func (f *Server) checkFileIsExists(path string) bool {
+	_, err := os.Stat(path)
+	if err != nil {
+		if os.IsExist(err) {
+			return true
+		}
+		return false
+	}
+	return true
 }
 
 //check or create router

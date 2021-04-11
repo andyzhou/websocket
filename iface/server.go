@@ -21,9 +21,12 @@ type IWServer interface {
 
 	//set
 	SetStaticPath(staticPath string)
+	SetTplPath(tplPath string)
+	SetGlobalTplFile(tplFile ... string) bool
 
 	//register router
 	RegisterStaticRouter(subUrl string) bool
+	RegisterPageRouter(subUrl string) bool
 	RegisterHttpRouter(
 			subUrl string,
 			cb func(w http.ResponseWriter, r *http.Request),

@@ -10,7 +10,7 @@ import (
 )
 
 /*
- * face of router, implement of IRouter
+ * face of web socket router, implement of IRouter
  */
 
 //face info

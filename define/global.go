@@ -3,6 +3,7 @@ package define
 //inter param
 const (
 	FileParaName = "file"
+	PageParaName = "page"
 	ChannelParaName = "channel"
 )
 
@@ -10,4 +11,9 @@ const (
 const (
 	RouterMethodOfGet = "GET"
 	RouterMethodOfPost = "POST"
+)
+
+//global
+const (
+	TplFileExtName = ".tpl"
 )
