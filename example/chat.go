@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/andyzhou/websocket/example/json"
 	"github.com/andyzhou/websocket/iface"
 )
 
@@ -10,6 +11,11 @@ import (
  *
  * - need apply the interface of IUserRouter
  */
+
+//chat json
+type ChatJson struct {
+	Kind string `json:"kind"`
+}
 
 type Chat struct {
 	parentRouter iface.IRouter
@@ -31,22 +37,25 @@ func (f *Chat) Quit() {
 }
 
 func (f *Chat) OnClose(connId int64) bool {
-	fmt.Print("Chat:OnClose, connId:", connId)
+	fmt.Println("Chat:OnClose, connId:", connId)
 	return true
 }
 
 func (f *Chat) OnReceiver(data interface{}) bool {
-	fmt.Print("Chat:OnReceiver, data:", data)
+	fmt.Println("Chat:OnReceiver, data:", data)
+
+	//init chat json
+	genOptJson := f.genChatJson("sys", "chat test")
+
+	//send message
+	f.castToAll(genOptJson.Encode())
+
 	return true
 }
 
 func (f *Chat) OnConnect(connId int64) bool {
-	fmt.Print("Chat:OnConnect, connId:", connId)
+	fmt.Println("Chat:OnConnect, connId:", connId)
 	return true
-}
-
-func (f *Chat) GetChannelParaName() string {
-	return ""
 }
 
 func (f *Chat) SetParentRouter(router iface.IRouter) bool {
@@ -55,4 +64,42 @@ func (f *Chat) SetParentRouter(router iface.IRouter) bool {
 	}
 	f.parentRouter = router
 	return true
+}
+
+///////////////
+//private func
+///////////////
+
+//cast to all
+func (f *Chat) castToAll(data []byte) bool {
+	//basic check
+	if f.parentRouter == nil || data == nil {
+		return false
+	}
+
+	//get channel instance
+	channel := f.parentRouter.GetChannel()
+	if channel == nil {
+		return false
+	}
+
+	//cast to channel
+	bRet := channel.SendData(data)
+
+	return bRet
+}
+
+//gen chat json
+func (f *Chat) genChatJson(nick, message string) *json.GenOptJson {
+	//chat json
+	chatJson := json.NewChatJson()
+	chatJson.SenderNick = nick
+	chatJson.Message = message
+
+	//gen opt json
+	genOptJson := json.NewGenOptJson()
+	genOptJson.Kind = "chat"
+	genOptJson.JsonObj = chatJson
+
+	return genOptJson
 }

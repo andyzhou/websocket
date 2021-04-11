@@ -48,6 +48,7 @@ func (f *Router) GetChannel() iface.IChannel {
 //main entry for router
 func (f *Router) Entry(conn *websocket.Conn) {
 	var (
+		connId int64
 		err error
 	)
 
@@ -60,6 +61,10 @@ func (f *Router) Entry(conn *websocket.Conn) {
 	defer func() {
 		if subErr := recover(); subErr != nil {
 			log.Println("Router:Entry panic, err:", subErr)
+		}
+		//call `OnClose` of IUserRouter
+		if f.userRouter != nil {
+			f.userRouter.OnClose(connId)
 		}
 	}()
 
@@ -74,10 +79,15 @@ func (f *Router) Entry(conn *websocket.Conn) {
 	}
 
 	//gen new connect id
-	newConnId := f.genConnId()
+	connId = f.genConnId()
 
 	//init IConn
-	connClient := NewConn(newConnId, conn)
+	connClient := NewConn(connId, conn)
+
+	//call `OnConnect` of IUserRouter
+	if f.userRouter != nil {
+		f.userRouter.OnConnect(connId)
+	}
 
 	//init web socket receiver
 	socketReceiver := websocket.JSON

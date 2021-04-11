@@ -84,7 +84,16 @@ function chat_message_send(messageDiv) {
 }
 
 //receive message from chat server
-function chat_server_message(dataObj) {
+function chat_server_message(orgJsonData) {
+  //check is json data
+  var isJson = isJSON(orgJsonData)
+  if (isJson == false){
+    return
+  }
+
+  //try parse json data to object
+  var dataObj = JSON.parse(orgJsonData);
+
   if(typeof(dataObj) == "undefined" || dataObj == null) {
     return;
   }
@@ -139,10 +148,8 @@ function chat_server_conn (serverAddr, channel) {
 
   //received message
   wsConn.onmessage = function(evt) {
-    //alert('data:' + evt.data);
-    var dataObj = JSON.parse(evt.data);
     //process message
-    chat_server_message(dataObj);
+    chat_server_message(evt.data);
   }
 
   return true;
@@ -165,6 +172,22 @@ function chat_message_append(message) {
   if (doScroll) {
     d.scrollTop = d.scrollHeight - d.clientHeight;
   }
+}
+
+
+////////////////////
+//check json string
+///////////////////
+function isJSON (something) {
+    if (typeof something != 'string') {
+        something = JSON.stringify(something);
+    }
+    try {
+        JSON.parse(something);
+        return true;
+    } catch (e) {
+        return false;
+    }
 }
 
 

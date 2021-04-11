@@ -97,7 +97,7 @@ func (f *Channel) NewConn(conn iface.IConn) bool {
 	}
 
 	//add new
-	f.connMap.Store(connId, connId)
+	f.connMap.Store(connId, conn)
 	atomic.AddInt64(&f.connCount, 1)
 
 	return true

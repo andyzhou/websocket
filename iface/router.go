@@ -10,7 +10,6 @@ import "golang.org/x/net/websocket"
 //need apply relate interface func
 type IUserRouter interface {
 	Quit()
-	GetChannelParaName() string
 	SetParentRouter(router IRouter) bool
 	OnReceiver(data interface{}) bool
 	OnClose(connId int64) bool
