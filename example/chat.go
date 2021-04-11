@@ -36,11 +36,14 @@ func NewChat() *Chat {
 func (f *Chat) Quit() {
 }
 
+
+//connect closed
 func (f *Chat) OnClose(connId int64) bool {
 	fmt.Println("Chat:OnClose, connId:", connId)
 	return true
 }
 
+//receiver data from client side
 func (f *Chat) OnReceiver(data interface{}) bool {
 	fmt.Println("Chat:OnReceiver, data:", data)
 
@@ -53,11 +56,22 @@ func (f *Chat) OnReceiver(data interface{}) bool {
 	return true
 }
 
+//frame ticker
+func (f *Chat) OnTick(now int64) {
+}
+
+//client connected
 func (f *Chat) OnConnect(connId int64) bool {
 	fmt.Println("Chat:OnConnect, connId:", connId)
 	return true
 }
 
+//get frame rate
+func (f *Chat) GetFrameRate() int {
+	return 0
+}
+
+//set parent router
 func (f *Chat) SetParentRouter(router iface.IRouter) bool {
 	if router == nil {
 		return false

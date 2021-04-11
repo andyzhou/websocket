@@ -10,13 +10,20 @@ import "golang.org/x/net/websocket"
 //need apply relate interface func
 type IUserRouter interface {
 	Quit()
+
+	//get
+	GetFrameRate() int
+	//set
 	SetParentRouter(router IRouter) bool
+
+	//cb
+	OnTick(now int64)
 	OnReceiver(data interface{}) bool
 	OnClose(connId int64) bool
 	OnConnect(connId int64) bool
 }
 
-//inter router
+//inter base router
 type IRouter interface {
 	Quit()
 	GetChannel() IChannel

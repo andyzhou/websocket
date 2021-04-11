@@ -8,11 +8,17 @@ import (
 	"log"
 	"reflect"
 	"sync/atomic"
+	"time"
 )
 
 /*
  * face of web socket router, implement of IRouter
  */
+
+//inter macro define
+const (
+	routerFrameRateMax = 60 //max frame rate
+)
 
 //face info
 type Router struct {
@@ -20,6 +26,8 @@ type Router struct {
 	channel iface.IChannel
 	userRouter iface.IUserRouter
 	connId int64
+	frameRate int
+	tickCloseChan chan bool
 }
 
 //construct
@@ -29,15 +37,35 @@ func NewRouter(tag string, userRouter iface.IUserRouter) *Router {
 		tag: tag,
 		channel: NewChannel(tag),
 		userRouter: userRouter,
+		tickCloseChan: make(chan bool, 1),
 	}
+
+	//check user router frame rate
+	this.frameRate = userRouter.GetFrameRate()
+	if this.frameRate > routerFrameRateMax {
+		this.frameRate = routerFrameRateMax
+	}
+
+	//spawn inter process
+	go this.runTickerProcess()
 	return this
 }
 
 //quit
 func (f *Router) Quit()  {
+	//defer
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("Router:Quit panic, err:", err)
+		}
+	}()
+
 	if f.channel != nil {
 		f.channel.Quit()
 	}
+
+	//close chan
+	f.tickCloseChan <- true
 }
 
 //get channel instance
@@ -116,6 +144,39 @@ func (f *Router) Entry(conn *websocket.Conn) {
 /////////////////
 //private func
 /////////////////
+
+//inter ticker process
+func (f *Router) runTickerProcess() {
+	//check frame rate
+	if f.frameRate <= 0 {
+		return
+	}
+
+	//init ticker
+	duration := time.Duration(1/f.frameRate) * time.Second
+	ticker := time.NewTicker(duration)
+
+	//defer
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("Router:runTickerProcess panic, err:", err)
+		}
+		ticker.Stop()
+		close(f.tickCloseChan)
+	}()
+
+	//loop
+	for {
+		select {
+		case <- ticker.C:
+			{
+				if f.userRouter != nil {
+					f.userRouter.OnTick(time.Now().Unix())
+				}
+			}
+		}
+	}
+}
 
 //reset json object
 func (f *Router) resetJsonObject(v interface{}) {
