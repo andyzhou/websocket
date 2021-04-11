@@ -9,12 +9,11 @@ import (
 
 const (
 	serverPort = 7200
-	reqUrlOfRoot = "/{page}"
-	reqUrlOfFile = "/file/{file}"
-	reqUrlOfChat = "/chat/{channel}"
-	channel = "test"
 	staticPath = "html"
 	tplPath = "tpl"
+	reqSubPageOfTest = "test"
+	reqSubReqOfTest = "test"
+	reqSubChannelOfTest = "test"
 )
 
 //global tpl files
@@ -40,11 +39,14 @@ func main() {
 	//set global tpl files
 	ws.SetGlobalTplFile(globalTplFiles...)
 
-	//register handler for page router
-	ws.RegisterPageRouter(reqUrlOfRoot)
-
 	//register handler for static router
-	ws.RegisterStaticRouter(reqUrlOfFile)
+	ws.RegisterStaticRouter()
+
+	//register handler for page router
+	ws.RegisterPageRouter(reqSubPageOfTest, cbForTestPage)
+
+	//register handler for http request router
+	ws.RegisterHttpRouter(reqSubReqOfTest, cbForTestReqResp)
 
 	//register handler for web socket router
 	//chat := NewChat()
@@ -60,6 +62,28 @@ func main() {
 	server.Quit()
 }
 
+//cb for test request response
+func cbForTestReqResp(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("cbForTestReqResp")
+	w.Write([]byte("hi"))
+}
+
+//cb for test page tpl data
+//need return hash map
+func cbForTestPage(r *http.Request) interface{} {
+	fmt.Println("cbForTestPage")
+	//get key parameter of query
+	//params := mux.Vars(r)
+	//name, _ := params["name"]
+	name := r.URL.Query().Get("name")
+	fmt.Println("para of name:", name)
+
+	//fill tpl data
+	data := make(map[string]interface{})
+	data["Title"] = "Hello"
+
+	return data
+}
 
 //root handler
 func rootHandler(w http.ResponseWriter, r *http.Request) {

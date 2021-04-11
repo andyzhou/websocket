@@ -1,9 +1,18 @@
 package define
 
+//inter request url pattern
+const (
+	ReqUrlOfPagePattern = "/page/{page}"
+	ReqUrlOfFilePattern = "/file/{file}"
+	ReqUrlOfHttpReqPattern = "/http/{request}"
+	ReqUrlOfChannelPattern = "/channel/{channel}"
+)
+
 //inter param
 const (
-	FileParaName = "file"
 	PageParaName = "page"
+	FileParaName = "file"
+	HttpReqParaName = "request"
 	ChannelParaName = "channel"
 )
 

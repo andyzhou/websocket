@@ -15,7 +15,6 @@ type IWServer interface {
 
 	//get
 	GetWsParas(ws *websocket.Conn) map[string]string
-	GetNewConnId() int64
 	GetTotalRouter() int64
 	GetRouter(channel string) IRouter
 
@@ -25,15 +24,17 @@ type IWServer interface {
 	SetGlobalTplFile(tplFile ... string) bool
 
 	//register router
-	RegisterStaticRouter(subUrl string) bool
-	RegisterPageRouter(subUrl string) bool
+	RegisterStaticRouter() bool
+	RegisterPageRouter(
+			subUrl string,
+			cb func(r *http.Request,
+		) interface{}) bool
 	RegisterHttpRouter(
 			subUrl string,
 			cb func(w http.ResponseWriter, r *http.Request),
 			method ... string,
 		) bool
-	RegisterWSRouter(
-			subUrl,
+	RegisterChannelRouter(
 			channel string,
 			userRouter IUserRouter,
 		) bool

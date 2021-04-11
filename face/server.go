@@ -29,7 +29,9 @@ type Server struct {
 	router *mux.Router
 	routerMap *sync.Map //channel -> IRouter
 	routerCount int64
-	connId int64
+	staticHandlerDone bool
+	cbOfPageDataMap map[string]func(r *http.Request) interface{} //requestUrl -> cb
+	cbOfHttpRouterMap map[string]func(w http.ResponseWriter, r *http.Request)
 }
 
 //construct
@@ -42,6 +44,8 @@ func NewWServer(port int) *Server {
 		router: mux.NewRouter(),
 		routerMap: new(sync.Map),
 		globalTplFiles: make([]string, 0),
+		cbOfPageDataMap: make(map[string]func(r *http.Request)interface{}),
+		cbOfHttpRouterMap: make(map[string]func(w http.ResponseWriter, r *http.Request)),
 	}
 	return this
 }
@@ -72,11 +76,6 @@ func (f *Server) GetWsParas(ws *websocket.Conn) map[string]string {
 		return nil
 	}
 	return mux.Vars(ws.Request())
-}
-
-//get new connect id
-func (f *Server) GetNewConnId() int64 {
-	return atomic.AddInt64(&f.connId, 1)
 }
 
 //get total router
@@ -116,27 +115,26 @@ func (f *Server) SetGlobalTplFile(tplFile ... string) bool {
 	return true
 }
 
-//register web sock¡et router
-func (f *Server) RegisterWSRouter(
-						subUrl string,
-						channelName string,
+//register web socket channel router
+func (f *Server) RegisterChannelRouter(
+						channel string,
 						userRouter iface.IUserRouter,
 					) bool {
 	//basic check
-	if subUrl == "" || channelName == "" || userRouter == nil {
+	if channel == "" || userRouter == nil {
 		return false
 	}
 
 	//init new router
-	router := f.createRouter(channelName, userRouter)
+	router := f.createRouter(channel, userRouter)
 
 	//add web socket sub router
-	f.router.Handle(subUrl, websocket.Handler(router.Entry))
+	f.router.Handle(define.ReqUrlOfChannelPattern, websocket.Handler(router.Entry))
 
 	return true
 }
 
-//register http router
+//register http request router
 func (f *Server) RegisterHttpRouter(
 						subUrl string,
 						cb func(w http.ResponseWriter, r *http.Request),
@@ -153,35 +151,55 @@ func (f *Server) RegisterHttpRouter(
 		}
 	}
 
+	//sync cb for http router request
+	if cb != nil {
+		f.cbOfHttpRouterMap[subUrl] = cb
+	}
+
 	//add http sub router
-	f.router.HandleFunc(subUrl, cb).Methods(method...)
+	f.router.HandleFunc(
+				define.ReqUrlOfHttpReqPattern,
+				f.interHttpRouter,
+			).Methods(method...)
 
 	return true
 }
 
 //register http page router
-func (f *Server) RegisterPageRouter(subUrl string) bool  {
+func (f *Server) RegisterPageRouter(
+						subUrl string,
+						cb func(r *http.Request) interface{},
+					) bool  {
 	//basic check
 	if subUrl == "" {
 		return false
 	}
 
+	//sync cb for get page data to fill tpl
+	if cb != nil {
+		f.cbOfPageDataMap[subUrl] = cb
+	}
+
 	//page router
-	f.router.HandleFunc(subUrl, f.interTplPageRouter).Methods(define.RouterMethodOfGet)
+	f.router.HandleFunc(
+				define.ReqUrlOfPagePattern,
+				f.interTplPageRouter,
+			).Methods(define.RouterMethodOfGet)
 
 	return true
 }
 
 //register http static router
-func (f *Server) RegisterStaticRouter(subUrl string) bool {
-	//basic check
-	if subUrl == "" {
+func (f *Server) RegisterStaticRouter() bool {
+	if f.staticHandlerDone {
 		return false
 	}
-
 	//static file
-	f.router.HandleFunc(subUrl, f.interStaticFileRouter).Methods(define.RouterMethodOfGet)
-
+	f.router.HandleFunc(
+				define.ReqUrlOfFilePattern,
+				f.interStaticFileRouter,
+			).Methods(define.RouterMethodOfGet)
+	f.staticHandlerDone = true
 	return true
 }
 
@@ -189,11 +207,35 @@ func (f *Server) RegisterStaticRouter(subUrl string) bool {
 //private func
 /////////////////
 
+//inter http router
+func (f *Server) interHttpRouter(
+					w http.ResponseWriter,
+					r *http.Request,
+				) {
+	//get sub request name
+	params := mux.Vars(r)
+	reqName, ok := params[define.HttpReqParaName]
+	if !ok {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	//check cb for http request
+	cb, ok := f.cbOfHttpRouterMap[reqName]
+	if ok && cb != nil {
+		cb(w, r)
+	}
+}
+
 //inter tpl page router
 func (f *Server) interTplPageRouter(
 					w http.ResponseWriter,
 					r *http.Request,
 				) {
+	var (
+		pageData interface{} //data for fill tpl
+	)
+
 	//get page file name
 	params := mux.Vars(r)
 	pageName, ok := params[define.PageParaName]
@@ -235,8 +277,14 @@ func (f *Server) interTplPageRouter(
 	//add main tpl
 	tpl.AddTpl(mainTplFile)
 
+	//try call cb to get page data
+	cbForPageData, ok := f.cbOfPageDataMap[pageName]
+	if ok && cbForPageData != nil {
+		pageData = cbForPageData(r)
+	}
+
 	//execute tpl
-	tpl.Execute(mainTplFile, nil, w, r)
+	tpl.Execute(mainTplFile, pageData, w, r)
 }
 
 //inter static file router
