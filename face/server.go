@@ -128,6 +128,9 @@ func (f *Server) RegisterChannelRouter(
 	//init new router
 	router := f.createRouter(channel, userRouter)
 
+	//set parent router
+	userRouter.SetParentRouter(router)
+
 	//add web socket sub router
 	f.router.Handle(define.ReqUrlOfChannelPattern, websocket.Handler(router.Entry))
 

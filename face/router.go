@@ -6,6 +6,7 @@ import (
 	"github.com/gorilla/mux"
 	"golang.org/x/net/websocket"
 	"log"
+	"reflect"
 	"sync/atomic"
 )
 
@@ -48,7 +49,6 @@ func (f *Router) GetChannel() iface.IChannel {
 func (f *Router) Entry(conn *websocket.Conn) {
 	var (
 		err error
-		genVal interface{}
 	)
 
 	//basic check
@@ -85,16 +85,19 @@ func (f *Router) Entry(conn *websocket.Conn) {
 	//add connect into channel
 	f.channel.NewConn(connClient)
 
+	//init general value
+	genVal := make(map[string]interface{})
+
 	//loop
 	for {
 		//receive data from client
-		err = socketReceiver.Receive(conn, genVal)
+		err = socketReceiver.Receive(conn, &genVal)
 		if err != nil {
 			log.Println("Router:Entry err:", err.Error())
 			break
 		}
 		//call cb for received data
-		if f.userRouter != nil {
+		if f.userRouter != nil && genVal != nil {
 			f.userRouter.OnReceiver(genVal)
 		}
 	}
@@ -103,6 +106,12 @@ func (f *Router) Entry(conn *websocket.Conn) {
 /////////////////
 //private func
 /////////////////
+
+//reset json object
+func (f *Router) resetJsonObject(v interface{}) {
+	p := reflect.ValueOf(v).Elem()
+	p.Set(reflect.Zero(p.Type()))
+}
 
 //gen new conn id
 func (f *Router) genConnId() int64 {

@@ -12,6 +12,7 @@ const (
 	staticPath = "html"
 	tplPath = "tpl"
 	reqSubPageOfTest = "test"
+	reqSubPageOfChannel = "channel"
 	reqSubReqOfTest = "test"
 	reqSubChannelOfTest = "test"
 )
@@ -44,9 +45,15 @@ func main() {
 
 	//register handler for page router
 	ws.RegisterPageRouter(reqSubPageOfTest, cbForTestPage)
+	ws.RegisterPageRouter(reqSubPageOfChannel, nil)
 
 	//register handler for http request router
 	ws.RegisterHttpRouter(reqSubReqOfTest, cbForTestReqResp)
+
+	//register handler for channel router
+	//init user router
+	userRouter := NewChat()
+	ws.RegisterChannelRouter(reqSubChannelOfTest, userRouter)
 
 	//register handler for web socket router
 	//chat := NewChat()

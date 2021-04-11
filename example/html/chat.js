@@ -120,7 +120,7 @@ function chat_server_conn (serverAddr, channel) {
   }
 
   //init web socket
-  var chatAddr = "ws://" + serverAddr + "/chat/" + channel;
+  var chatAddr = "ws://" + serverAddr + "/channel/" + channel;
   //var chatAddr = "ws://adam.abc.com:6600/chat/test"
   //alert('chatAddr:' + chatAddr);
   wsConn = new WebSocket(chatAddr);

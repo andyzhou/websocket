@@ -11,6 +11,7 @@ import "golang.org/x/net/websocket"
 type IUserRouter interface {
 	Quit()
 	GetChannelParaName() string
+	SetParentRouter(router IRouter) bool
 	OnReceiver(data interface{}) bool
 	OnClose(connId int64) bool
 	OnConnect(connId int64) bool
