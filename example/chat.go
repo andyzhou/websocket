@@ -7,16 +7,12 @@ import (
 )
 
 /*
- * user router of chat
+ * user router of chat, demo for channel apply.
  *
  * - need apply the interface of IUserRouter
  */
 
-//chat json
-type ChatJson struct {
-	Kind string `json:"kind"`
-}
-
+//face info
 type Chat struct {
 	parentRouter iface.IRouter
 }
@@ -56,7 +52,7 @@ func (f *Chat) OnReceiver(data interface{}) bool {
 	return true
 }
 
-//frame ticker
+//frame ticker, this works when frame rate > 0
 func (f *Chat) OnTick(now int64) {
 }
 

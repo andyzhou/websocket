@@ -55,10 +55,6 @@ func main() {
 	userRouter := NewChat()
 	ws.RegisterChannelRouter(reqSubChannelOfTest, userRouter)
 
-	//register handler for web socket router
-	//chat := NewChat()
-	//ws.RegisterWSRouter(reqUrlOfChat, channel, chat)
-
 	//start server
 	wg.Add(1)
 	fmt.Println("start example server..")
