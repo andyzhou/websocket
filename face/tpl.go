@@ -8,6 +8,9 @@ import (
 
 /*
  * face of template, implement of ITpl
+ *
+ * - support cached tpl for performance
+ * - sub template instance manage self
  */
 
 //face info
@@ -16,6 +19,8 @@ type Tpl struct {
 	rootPath string
 	tplFiles []string
 	tpl *template.Template
+	globalTplFiles []string
+	tplMap map[string]*template.Template //mainTpl -> *template
 }
 
 //construct
@@ -26,6 +31,8 @@ func NewTpl(rootPath string) *Tpl {
 		autoLoad: true,
 		tpl: new(template.Template),
 		tplFiles: make([]string, 0),
+		globalTplFiles:make([]string, 0),
+		tplMap:make(map[string]*template.Template),
 	}
 	return this
 }
@@ -86,4 +93,43 @@ func (f *Tpl) AddTpl(files ...string) bool {
 	return true
 }
 
+//set main tpl file
+func (f *Tpl) SetMainTpl(tag, file string) bool {
+	//basic check
+	if tag == "" || file == "" {
+		return false
+	}
 
+
+	return true
+}
+
+//set global tpl files
+func (f *Tpl) SetGlobalTplFiles(files ... string) bool {
+	//basic check
+	if files == nil || len(files) <= 0 {
+		return false
+	}
+
+	//reset global tpl files
+	f.globalTplFiles = make([]string, 0)
+	f.globalTplFiles = files
+	return true
+}
+
+
+//////////////////
+//private func
+//////////////////
+
+func (f *Tpl) getTemplateByTag(tag string) *template.Template {
+	//basic check
+	if tag == "" || f.tplMap == nil {
+		return nil
+	}
+	v, ok := f.tplMap[tag]
+	if !ok {
+		return nil
+	}
+	return v
+}
