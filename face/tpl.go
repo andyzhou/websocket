@@ -24,8 +24,6 @@ type mainTplInfo struct {
 type Tpl struct {
 	autoLoad bool
 	rootPath string
-	tplFiles []string
-	tpl *template.Template
 	globalTplFiles []string
 	tplMap map[string]*mainTplInfo //mainTpl -> *mainTplInfo
 }
@@ -36,8 +34,6 @@ func NewTpl(rootPath string) *Tpl {
 	this := &Tpl{
 		rootPath: rootPath,
 		autoLoad: true,
-		tpl: new(template.Template),
-		tplFiles: make([]string, 0),
 		globalTplFiles:make([]string, 0),
 		tplMap:make(map[string]*mainTplInfo),
 	}
@@ -46,7 +42,7 @@ func NewTpl(rootPath string) *Tpl {
 
 //reset all tpl files
 func (f *Tpl) ResetTpl() {
-	f.tplFiles = make([]string, 0)
+	f.globalTplFiles = make([]string, 0)
 }
 
 //set auto load switch
