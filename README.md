@@ -1,5 +1,5 @@
 # websocket
-base web socket library
+Base web socket library, base on go.
 
 # request ways
 - /file/test.js [for static file request]
@@ -8,4 +8,4 @@ base web socket library
 - /channel/test?name=123 [for web socket channel request]
 
 # how to use?
-see sub dir or `example`
+see sub dir `example`
