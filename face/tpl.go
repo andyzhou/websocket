@@ -2,6 +2,7 @@ package face
 
 import (
 	"fmt"
+	"github.com/pkg/errors"
 	"html/template"
 	"net/http"
 )
@@ -13,6 +14,12 @@ import (
  * - sub template instance manage self
  */
 
+//main tpl info
+type mainTplInfo struct {
+	mainTplFile string
+	tpl *template.Template
+}
+
 //face info
 type Tpl struct {
 	autoLoad bool
@@ -20,7 +27,7 @@ type Tpl struct {
 	tplFiles []string
 	tpl *template.Template
 	globalTplFiles []string
-	tplMap map[string]*template.Template //mainTpl -> *template
+	tplMap map[string]*mainTplInfo //mainTpl -> *mainTplInfo
 }
 
 //construct
@@ -32,7 +39,7 @@ func NewTpl(rootPath string) *Tpl {
 		tpl: new(template.Template),
 		tplFiles: make([]string, 0),
 		globalTplFiles:make([]string, 0),
-		tplMap:make(map[string]*template.Template),
+		tplMap:make(map[string]*mainTplInfo),
 	}
 	return this
 }
@@ -49,7 +56,7 @@ func (f *Tpl) SetAutoLoad(auto bool) {
 
 //parse and execute tpl
 func (f *Tpl) Execute(
-			mainTpl string,
+			tag string,
 			data interface{},
 			w http.ResponseWriter,
 			r *http.Request,
@@ -58,23 +65,72 @@ func (f *Tpl) Execute(
 		err error
 	)
 
-	//parse tpl files
-	f.tpl = template.New(mainTpl)
-	f.tpl, err = template.ParseFiles(f.tplFiles...)
-	if err != nil {
+	//check tpl info
+	tplInfo := f.getTemplateByTag(tag)
+	if tplInfo == nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	if f.autoLoad {
+		mainTplPath := fmt.Sprintf("%s/%s", f.rootPath, tplInfo.mainTplFile)
+		files := f.globalTplFiles
+		files = append(files, mainTplPath)
+		tplInfo.tpl, err = template.ParseFiles(files...)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
 	//execute
-	err = f.tpl.ExecuteTemplate(w, mainTpl, data)
+	err = tplInfo.tpl.ExecuteTemplate(w, tag, data)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
-//add tpl file
-func (f *Tpl) AddTpl(files ...string) bool {
+//set main tpl file
+func (f *Tpl) SetMainTpl(tag, file string) error {
+	var (
+		isNew bool
+		err error
+	)
+
+	//basic check
+	if tag == "" || file == "" {
+		return errors.New("invalid parameter")
+	}
+
+	//check tpl info
+	tplInfo := f.getTemplateByTag(tag)
+	if tplInfo == nil {
+		//init new
+		tplInfo = &mainTplInfo{
+			mainTplFile:file,
+			tpl:template.New(tag),
+		}
+		//sync into running env
+		f.tplMap[tag] = tplInfo
+		isNew = true
+	}
+
+	if isNew || f.autoLoad {
+		//need pre-parse tpl files
+		mainTplPath := fmt.Sprintf("%s/%s", f.rootPath, file)
+		files := f.globalTplFiles
+		files = append(files, mainTplPath)
+		tplInfo.tpl, err = template.ParseFiles(files...)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+//set global tpl files
+func (f *Tpl) SetGlobalTplFiles(files ... string) bool {
 	var (
 		tplFilePath string
 	)
@@ -84,36 +140,15 @@ func (f *Tpl) AddTpl(files ...string) bool {
 		return false
 	}
 
+	//reset global tpl files
+	f.globalTplFiles = make([]string, 0)
+
 	//add batch tpl file
 	for _, file := range files {
 		tplFilePath = fmt.Sprintf("%s/%s", f.rootPath, file)
-		f.tplFiles = append(f.tplFiles, tplFilePath)
+		f.globalTplFiles = append(f.globalTplFiles, tplFilePath)
 	}
 
-	return true
-}
-
-//set main tpl file
-func (f *Tpl) SetMainTpl(tag, file string) bool {
-	//basic check
-	if tag == "" || file == "" {
-		return false
-	}
-
-
-	return true
-}
-
-//set global tpl files
-func (f *Tpl) SetGlobalTplFiles(files ... string) bool {
-	//basic check
-	if files == nil || len(files) <= 0 {
-		return false
-	}
-
-	//reset global tpl files
-	f.globalTplFiles = make([]string, 0)
-	f.globalTplFiles = files
 	return true
 }
 
@@ -122,7 +157,7 @@ func (f *Tpl) SetGlobalTplFiles(files ... string) bool {
 //private func
 //////////////////
 
-func (f *Tpl) getTemplateByTag(tag string) *template.Template {
+func (f *Tpl) getTemplateByTag(tag string) *mainTplInfo {
 	//basic check
 	if tag == "" || f.tplMap == nil {
 		return nil

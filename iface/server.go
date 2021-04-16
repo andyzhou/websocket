@@ -22,6 +22,7 @@ type IWServer interface {
 	SetStaticPath(staticPath string)
 	SetTplPath(tplPath string)
 	SetGlobalTplFile(tplFile ... string) bool
+	SetTplAutoLoad(auto bool)
 
 	//register router
 	RegisterStaticRouter() bool

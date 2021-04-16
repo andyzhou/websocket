@@ -40,6 +40,9 @@ func main() {
 	//set global tpl files
 	ws.SetGlobalTplFile(globalTplFiles...)
 
+	//set tpl auto load switcher
+	ws.SetTplAutoLoad(false)
+
 	//register handler for static router
 	ws.RegisterStaticRouter()
 
@@ -57,7 +60,7 @@ func main() {
 
 	//start server
 	wg.Add(1)
-	fmt.Println("start example server..")
+	fmt.Println("start example server at :", serverPort)
 	server.Start()
 
 	wg.Wait()

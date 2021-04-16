@@ -24,6 +24,7 @@ type Server struct {
 	address string //host:port
 	staticPath string //static root path
 	tplPath string //tpl root path
+	tplAutoReload bool
 	globalTplFiles []string
 	hsm *http.ServeMux
 	router *mux.Router
@@ -113,6 +114,12 @@ func (f *Server) SetGlobalTplFile(tplFile ... string) bool {
 	f.globalTplFiles = make([]string, 0)
 	f.globalTplFiles = append(f.globalTplFiles, tplFile...)
 	return true
+}
+
+//set tpl file auto load or not
+//if true, auto reload tpl every time
+func (f *Server) SetTplAutoLoad(auto bool) {
+	f.tplAutoReload = auto
 }
 
 //register web socket channel router
@@ -272,13 +279,16 @@ func (f *Server) interTplPageRouter(
 	//init tpl instance
 	tpl := NewTpl(tplRootPath)
 
+	//set auto load switcher
+	tpl.SetAutoLoad(f.tplAutoReload)
+
 	//add global tpl
 	if f.globalTplFiles != nil {
-		tpl.AddTpl(f.globalTplFiles...)
+		tpl.SetGlobalTplFiles(f.globalTplFiles...)
 	}
 
 	//add main tpl
-	tpl.AddTpl(mainTplFile)
+	tpl.SetMainTpl(mainTplFile, mainTplFile)
 
 	//try call cb to get page data
 	cbForPageData, ok := f.cbOfPageDataMap[pageName]
