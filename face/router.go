@@ -13,6 +13,8 @@ import (
 
 /*
  * face of web socket router, implement of IRouter
+ *
+ * - one channel one router
  */
 
 //inter macro define
