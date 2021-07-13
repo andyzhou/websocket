@@ -92,6 +92,10 @@ func (f *Router) Entry(conn *websocket.Conn) {
 		return
 	}
 
+	//get conn request refer
+	//refer := conn.Request().Referer()
+	//log.Println("refer:", refer)
+
 	//defer
 	defer func() {
 		if subErr := recover(); subErr != nil {
@@ -219,6 +223,8 @@ func (f *Router) runTickerProcess() {
 					f.userRouter.OnTick(time.Now().Unix())
 				}
 			}
+		case <- f.tickCloseChan:
+			return
 		}
 	}
 }
