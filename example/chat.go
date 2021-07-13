@@ -15,8 +15,12 @@ import (
 
 //inter macro define
 const (
+	//for request kind
 	RequestKindOfLogin = "login"
 	RequestKindOfChat = "chat"
+
+	//others
+	Frequency = 2 //seconds
 )
 
 //chat conn info
@@ -48,13 +52,31 @@ func NewChat() *Chat {
 func (f *Chat) Quit() {
 }
 
-
 //connect closed
 func (f *Chat) OnClose(connId int64) bool {
 	fmt.Println("Chat:OnClose, connId:", connId)
 	f.Lock()
 	defer f.Unlock()
 	delete(f.users, connId)
+	return true
+}
+
+//hit frequency limit
+func (f *Chat) OnFrequencyLimit(connId int64) bool {
+	if connId <= 0 {
+		return false
+	}
+	//check user
+	v, ok := f.users[connId]
+	if !ok {
+		return false
+	}
+	//tips
+	tips := fmt.Sprintf("hi, %s, your send too fast!", v.Nick)
+	chatOptJson := f.genChatJson("sys", tips)
+
+	//send to current conn
+	f.castToConnIds(chatOptJson.Encode(), connId)
 	return true
 }
 
@@ -146,6 +168,11 @@ func (f *Chat) GetFrameRate() int {
 	return 0
 }
 
+//get frequency
+func (f *Chat) GetFrequency() int {
+	return Frequency
+}
+
 //set parent router
 func (f *Chat) SetParentRouter(router iface.IRouter) bool {
 	if router == nil {
@@ -158,6 +185,25 @@ func (f *Chat) SetParentRouter(router iface.IRouter) bool {
 ///////////////
 //private func
 ///////////////
+
+//cast to assigned connect ids
+func (f *Chat) castToConnIds(data []byte, connIds ... int64) bool {
+	//basic check
+	if f.parentRouter == nil || data == nil || connIds == nil {
+		return false
+	}
+
+	//get channel instance
+	channel := f.parentRouter.GetChannel()
+	if channel == nil {
+		return false
+	}
+
+	//cast to channel
+	bRet := channel.SendData(data, connIds...)
+
+	return bRet
+}
 
 //cast to all
 func (f *Chat) castToAll(data []byte) bool {

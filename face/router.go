@@ -29,6 +29,8 @@ type Router struct {
 	userRouter iface.IUserRouter
 	connId int64
 	frameRate int
+	frequency int
+	frequencyMap map[int64]int64 //connId -> lastTimeStamp
 	tickCloseChan chan bool
 }
 
@@ -39,14 +41,16 @@ func NewRouter(tag string, userRouter iface.IUserRouter) *Router {
 		tag: tag,
 		channel: NewChannel(tag),
 		userRouter: userRouter,
+		frequencyMap: make(map[int64]int64),
 		tickCloseChan: make(chan bool, 1),
 	}
 
-	//check user router frame rate
+	//check user router frame rate and frequency
 	this.frameRate = userRouter.GetFrameRate()
 	if this.frameRate > routerFrameRateMax {
 		this.frameRate = routerFrameRateMax
 	}
+	this.frequency = userRouter.GetFrequency()
 
 	//spawn inter process
 	go this.runTickerProcess()
@@ -78,6 +82,7 @@ func (f *Router) GetChannel() iface.IChannel {
 //main entry for router
 func (f *Router) Entry(conn *websocket.Conn) {
 	var (
+		bRet bool
 		connId int64
 		err error
 	)
@@ -95,6 +100,9 @@ func (f *Router) Entry(conn *websocket.Conn) {
 		//call `OnClose` of IUserRouter
 		if f.userRouter != nil {
 			f.userRouter.OnClose(connId)
+		}
+		if f.frequency > 0 {
+			delete(f.frequencyMap, connId)
 		}
 	}()
 
@@ -138,7 +146,15 @@ func (f *Router) Entry(conn *websocket.Conn) {
 		}
 		//call cb for received data
 		if f.userRouter != nil && genVal != nil {
-			f.userRouter.OnReceiver(connId, genVal)
+			//check frequency
+			bRet = f.syncFrequency(connId)
+			if !bRet {
+				//frequency limit
+				f.userRouter.OnFrequencyLimit(connId)
+			}else{
+				//general opt
+				f.userRouter.OnReceiver(connId, genVal)
+			}
 		}
 	}
 }
@@ -146,6 +162,33 @@ func (f *Router) Entry(conn *websocket.Conn) {
 /////////////////
 //private func
 /////////////////
+
+//sync frequency data
+func (f *Router) syncFrequency(connId int64) bool {
+	//check
+	if f.frequency <= 0 {
+		//no limit
+		return true
+	}
+	if connId <= 0 || f.frequencyMap == nil {
+		return false
+	}
+
+	//check time diff
+	now := time.Now().Unix()
+	last, ok := f.frequencyMap[connId]
+	if !ok {
+		f.frequencyMap[connId] = now
+		return true
+	}
+
+	diff := now - last
+	if diff <= int64(f.frequency) {
+		return false
+	}
+	f.frequencyMap[connId] = now
+	return true
+}
 
 //inter ticker process
 func (f *Router) runTickerProcess() {

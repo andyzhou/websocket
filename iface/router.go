@@ -13,10 +13,13 @@ type IUserRouter interface {
 
 	//get
 	GetFrameRate() int
+	GetFrequency() int
+
 	//set
 	SetParentRouter(router IRouter) bool
 
 	//cb
+	OnFrequencyLimit(connId int64) bool
 	OnTick(now int64)
 	OnReceiver(connId int64, data interface{}) bool
 	OnClose(connId int64) bool
