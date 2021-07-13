@@ -8,8 +8,6 @@ import (
 
 /*
  * base json interface
- * @author <AndyZhou>
- * @mail <diudiu8848@163.com>
  */
 
 type BaseJson struct {
