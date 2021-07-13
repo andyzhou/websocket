@@ -11,9 +11,10 @@ const (
 	serverPort = 7200
 	staticPath = "html"
 	tplPath = "tpl"
+
 	reqSubPageOfTest = "test"
 	reqSubPageOfChannel = "channel"
-	reqSubReqOfTest = "test"
+	reqSubHttpReqOfTest = "test"
 	reqSubChannelOfTest = "test"
 )
 
@@ -51,7 +52,7 @@ func main() {
 	ws.RegisterPageRouter(reqSubPageOfChannel, nil)
 
 	//register handler for http request router
-	ws.RegisterHttpRouter(reqSubReqOfTest, cbForTestReqResp)
+	ws.RegisterHttpRouter(reqSubHttpReqOfTest, cbForTestReqResp)
 
 	//register handler for channel router
 	//init user router
@@ -68,7 +69,7 @@ func main() {
 	server.Quit()
 }
 
-//cb for test request response
+//cb for test http request response
 func cbForTestReqResp(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("cbForTestReqResp")
 	w.Write([]byte("hi"))

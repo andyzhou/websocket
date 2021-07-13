@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/andyzhou/websocket/example/json"
 	"github.com/andyzhou/websocket/iface"
+	"sync"
 )
 
 /*
@@ -12,15 +13,30 @@ import (
  * - need apply the interface of IUserRouter
  */
 
+//inter macro define
+const (
+	RequestKindOfLogin = "login"
+	RequestKindOfChat = "chat"
+)
+
+//chat conn info
+type ChatConn struct {
+	UserId int64
+	Nick string
+}
+
 //face info
 type Chat struct {
 	parentRouter iface.IRouter
+	users map[int64]*ChatConn //connId -> chatConn
+	sync.RWMutex
 }
 
 //construct
 func NewChat() *Chat {
 	//self init
 	this := &Chat{
+		users:make(map[int64]*ChatConn),
 	}
 	return this
 }
@@ -36,18 +52,80 @@ func (f *Chat) Quit() {
 //connect closed
 func (f *Chat) OnClose(connId int64) bool {
 	fmt.Println("Chat:OnClose, connId:", connId)
+	f.Lock()
+	defer f.Unlock()
+	delete(f.users, connId)
 	return true
 }
 
 //receiver data from client side
-func (f *Chat) OnReceiver(data interface{}) bool {
-	fmt.Println("Chat:OnReceiver, data:", data)
+func (f *Chat) OnReceiver(connId int64, data interface{}) bool {
+	fmt.Printf("Chat:OnReceiver, connId:%v, data:%v\n", connId, data)
+	v, ok := data.(map[string]interface{})
+	if !ok {
+		return false
+	}
 
-	//init chat json
-	genOptJson := f.genChatJson("sys", "chat test")
+	//decode gen opt data
+	genOptJson := json.NewGenOptJson()
+	genOptByte := genOptJson.EncodeSimple(v)
+	bRet := genOptJson.Decode(genOptByte)
+	if !bRet {
+		return false
+	}
+
+	//check sub json obj
+	subJsonObj, ok := genOptJson.JsonObj.(map[string]interface{})
+	if !ok {
+		return false
+	}
+
+	//init chat opt json
+	chatOptJson := json.NewGenOptJson()
+
+	//do relate opt by request kind
+	switch genOptJson.Kind {
+	case RequestKindOfLogin:
+		{
+			chatLoginJson := json.NewChatLoginJson()
+			loginJsonByte := chatLoginJson.EncodeSimple(subJsonObj)
+			bRet = chatLoginJson.Decode(loginJsonByte)
+			if !bRet {
+				return false
+			}
+
+			//login opt
+			v, ok := f.users[connId]
+			if ok {
+				v.UserId = chatLoginJson.Id
+				v.Nick = chatLoginJson.Nick
+			}
+
+			//tips
+			tips := fmt.Sprintf("welcome %s", chatLoginJson.Nick)
+			chatOptJson = f.genChatJson("sys", tips)
+		}
+	case RequestKindOfChat:
+		{
+			chatInfoJson := json.NewChatInfoJson()
+			chatJsonByte := chatInfoJson.EncodeSimple(subJsonObj)
+			bRet = chatInfoJson.Decode(chatJsonByte)
+			if !bRet {
+				return false
+			}
+
+			//check login
+			v, ok := f.users[connId]
+			if !ok {
+				return false
+			}
+
+			chatOptJson = f.genChatJson(v.Nick, chatInfoJson.Message)
+		}
+	}
 
 	//send message
-	f.castToAll(genOptJson.Encode())
+	f.castToAll(chatOptJson.Encode())
 
 	return true
 }
@@ -59,6 +137,7 @@ func (f *Chat) OnTick(now int64) {
 //client connected
 func (f *Chat) OnConnect(connId int64) bool {
 	fmt.Println("Chat:OnConnect, connId:", connId)
+	f.users[connId] = &ChatConn{}
 	return true
 }
 

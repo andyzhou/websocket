@@ -138,7 +138,7 @@ func (f *Router) Entry(conn *websocket.Conn) {
 		}
 		//call cb for received data
 		if f.userRouter != nil && genVal != nil {
-			f.userRouter.OnReceiver(genVal)
+			f.userRouter.OnReceiver(connId, genVal)
 		}
 	}
 }

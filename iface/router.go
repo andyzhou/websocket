@@ -18,7 +18,7 @@ type IUserRouter interface {
 
 	//cb
 	OnTick(now int64)
-	OnReceiver(data interface{}) bool
+	OnReceiver(connId int64, data interface{}) bool
 	OnClose(connId int64) bool
 	OnConnect(connId int64) bool
 }
