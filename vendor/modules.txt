@@ -1,0 +1,6 @@
+# github.com/gorilla/mux v1.8.0
+## explicit
+github.com/gorilla/mux
+# golang.org/x/net v0.0.0-20210825183410-e898025ed96a
+## explicit
+golang.org/x/net/websocket

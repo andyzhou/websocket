@@ -13,7 +13,7 @@ import (
 
 //inter macro define
 const (
-	channelSendChanSize = 1024
+	channelSendChanSize = 1024 * 5
 )
 
 //send queue
@@ -152,7 +152,7 @@ func (f *Channel) runMainProcess() {
 		close(f.closeChan)
 	}()
 
-	//loop
+	//async loop
 	for {
 		if needQuit {
 			break

@@ -1,8 +1,8 @@
 package face
 
 import (
+	"errors"
 	"fmt"
-	"github.com/pkg/errors"
 	"html/template"
 	"net/http"
 )

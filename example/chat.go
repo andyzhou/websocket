@@ -83,6 +83,7 @@ func (f *Chat) OnFrequencyLimit(connId int64) bool {
 //receiver data from client side
 func (f *Chat) OnReceiver(connId int64, data interface{}) bool {
 	fmt.Printf("Chat:OnReceiver, connId:%v, data:%v\n", connId, data)
+	//detect data
 	v, ok := data.(map[string]interface{})
 	if !ok {
 		return false
