@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/andyzhou/websocket/example/json"
 	"github.com/andyzhou/websocket/iface"
+	"log"
 	"sync"
 )
 
@@ -54,7 +55,7 @@ func (f *Chat) Quit() {
 
 //connect closed
 func (f *Chat) OnClose(connId int64) bool {
-	fmt.Println("Chat:OnClose, connId:", connId)
+	log.Println("Chat:OnClose, connId:", connId)
 	f.Lock()
 	defer f.Unlock()
 	delete(f.users, connId)
@@ -82,7 +83,7 @@ func (f *Chat) OnFrequencyLimit(connId int64) bool {
 
 //receiver data from client side
 func (f *Chat) OnReceiver(connId int64, data interface{}) bool {
-	fmt.Printf("Chat:OnReceiver, connId:%v, data:%v\n", connId, data)
+	log.Printf("Chat:OnReceiver, connId:%v, data:%v\n", connId, data)
 	//detect data
 	v, ok := data.(map[string]interface{})
 	if !ok {
