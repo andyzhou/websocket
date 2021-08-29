@@ -103,8 +103,31 @@ func (f *Channel) NewConn(conn iface.IConn) bool {
 	return true
 }
 
+//remove conn by id
+func (f *Channel) RemoveConn(connId int64) bool {
+	if connId <= 0 {
+		return false
+	}
+	f.connMap.Delete(connId)
+	atomic.AddInt64(&f.connCount, -1)
+	return true
+}
+
+//block conn
+func (f *Channel) BlockConn(connId, endTime int64) bool {
+	if connId <= 0 {
+		return false
+	}
+	conn := f.getConnById(connId)
+	if conn == nil {
+		return false
+	}
+	conn.Block(endTime)
+	return true
+}
+
 //send data
-func (f *Channel) SendData(data []byte, connId ... int64) (bRet bool) {
+func (f *Channel) SendData(data []byte, connIds ... int64) (bRet bool) {
 	//basic check
 	if data == nil || f.connCount <= 0 {
 		bRet = false
@@ -122,7 +145,7 @@ func (f *Channel) SendData(data []byte, connId ... int64) (bRet bool) {
 	//init queue data
 	queue := sendQueue{
 		data: data,
-		connIds: connId,
+		connIds: connIds,
 	}
 
 	//send to chan
@@ -139,7 +162,7 @@ func (f *Channel) SendData(data []byte, connId ... int64) (bRet bool) {
 func (f *Channel) runMainProcess() {
 	var (
 		queue sendQueue
-		needQuit, isOk bool
+		isOk bool
 	)
 
 	//defer
@@ -154,17 +177,13 @@ func (f *Channel) runMainProcess() {
 
 	//async loop
 	for {
-		if needQuit {
-			break
-		}
 		select {
 		case queue, isOk = <- f.sendChan:
 			if isOk {
 				f.sendData(&queue)
 			}
 		case <- f.closeChan:
-			needQuit = true
-			break
+			return
 		}
 	}
 }

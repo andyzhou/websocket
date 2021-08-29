@@ -21,7 +21,7 @@ const (
 	RequestKindOfChat = "chat"
 
 	//others
-	Frequency = 2 //seconds
+	Frequency = 5 //seconds
 )
 
 //chat conn info
@@ -51,6 +51,7 @@ func NewChat() *Chat {
 ///////////////////////////
 
 func (f *Chat) Quit() {
+	f.users = make(map[int64]*ChatConn)
 }
 
 //connect closed
@@ -83,6 +84,9 @@ func (f *Chat) OnFrequencyLimit(connId int64) bool {
 
 //receiver data from client side
 func (f *Chat) OnReceiver(connId int64, data interface{}) bool {
+	var (
+		targetOwnerIds []int64
+	)
 	log.Printf("Chat:OnReceiver, connId:%v, data:%v\n", connId, data)
 	//detect data
 	v, ok := data.(map[string]interface{})
@@ -125,6 +129,15 @@ func (f *Chat) OnReceiver(connId int64, data interface{}) bool {
 				v.Nick = chatLoginJson.Nick
 			}
 
+			//get channel and set conn owner
+			channel := f.parentRouter.GetChannel()
+			if channel != nil {
+				conn := channel.GetConnById(connId)
+				if conn != nil {
+					conn.SetOwnerId(chatLoginJson.Id)
+				}
+			}
+
 			//tips
 			tips := fmt.Sprintf("welcome %s", chatLoginJson.Nick)
 			chatOptJson = f.genChatJson("sys", tips)
@@ -144,12 +157,13 @@ func (f *Chat) OnReceiver(connId int64, data interface{}) bool {
 				return false
 			}
 
+			targetOwnerIds = chatInfoJson.AtUserIds
 			chatOptJson = f.genChatJson(v.Nick, chatInfoJson.Message)
 		}
 	}
 
 	//send message
-	f.castToAll(chatOptJson.Encode())
+	f.sendData(chatOptJson.Encode(), targetOwnerIds...)
 
 	return true
 }
@@ -207,8 +221,12 @@ func (f *Chat) castToConnIds(data []byte, connIds ... int64) bool {
 	return bRet
 }
 
-//cast to all
-func (f *Chat) castToAll(data []byte) bool {
+//cast chat data
+func (f *Chat) sendData(data []byte, targetIds ...int64) bool {
+	var (
+		connIds []int64
+	)
+
 	//basic check
 	if f.parentRouter == nil || data == nil {
 		return false
@@ -220,8 +238,20 @@ func (f *Chat) castToAll(data []byte) bool {
 		return false
 	}
 
+	//get connect id for target user
+	connIds = make([]int64, 0)
+	if targetIds != nil {
+		for _, targetId := range targetIds {
+			for connId, v := range f.users {
+				if v.UserId == targetId {
+					connIds = append(connIds, connId)
+				}
+			}
+		}
+	}
+
 	//cast to channel
-	bRet := channel.SendData(data)
+	bRet := channel.SendData(data, connIds...)
 
 	return bRet
 }

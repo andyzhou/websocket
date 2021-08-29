@@ -3,6 +3,7 @@ package face
 import (
 	"errors"
 	"golang.org/x/net/websocket"
+	"time"
 )
 
 /*
@@ -13,6 +14,7 @@ import (
 type Conn struct {
 	connId int64
 	ownerId int64
+	blockEndTime int64
 	conn *websocket.Conn
 }
 
@@ -43,6 +45,11 @@ func (f *Conn) GetConnId() int64 {
 	return f.connId
 }
 
+//block conn
+func (f *Conn) Block(endTime int64) {
+	f.blockEndTime = endTime
+}
+
 //set conn owner id
 func (f *Conn) SetOwnerId(ownerId int64) {
 	f.ownerId = ownerId
@@ -54,6 +61,15 @@ func (f *Conn) SendData(data []byte) (err error) {
 	if data == nil || f.conn == nil {
 		err = errors.New("invalid parameter")
 		return
+	}
+	if f.blockEndTime > 0 {
+		now := time.Now().Unix()
+		if f.blockEndTime > now {
+			//still blocked
+			err = errors.New("conn be blocked")
+			return
+		}
+		f.blockEndTime = 0
 	}
 
 	//try catch panic

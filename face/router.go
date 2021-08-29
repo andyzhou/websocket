@@ -108,6 +108,8 @@ func (f *Router) Entry(conn *websocket.Conn) {
 		if f.frequency > 0 {
 			delete(f.frequencyMap, connId)
 		}
+		//remove conn from channel
+		f.channel.RemoveConn(connId)
 	}()
 
 	//check channel name

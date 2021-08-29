@@ -24,6 +24,7 @@ type ChatTipsJson struct {
 
 //chat info
 type ChatInfoJson struct {
+	AtUserIds []int64 `json:"atUserIds"`
 	Message string `json:"message"`
 	json.BaseJson
 }
