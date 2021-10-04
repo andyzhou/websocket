@@ -4,7 +4,7 @@
 
 <!-- live chat div -->
 <div class="message" id="log">
-欢迎进入直播聊天室..
+Welcome to chat room..
 </div>
 <div class="genDiv">
   <input type="text" id="msg" size="70"/>
@@ -15,7 +15,7 @@
 var chatServerAddr = "localhost:7200";
 var chatServerChannel = "test";
 var userId = 1;
-var userNick = "xxxx";
+var userNick = "andy";
 
 $(function() {
   //begin connect chat server

@@ -106,7 +106,7 @@ function chat_server_message(orgJsonData) {
   var message = jsonObj.message;
 
   if(kind == "tips") {
-    message = "提示:" + message;
+    message = "tips:" + message;
   }else{
     message = jsonObj.senderNick + ':' + message;
   }
