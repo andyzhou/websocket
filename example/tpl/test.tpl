@@ -2,6 +2,6 @@
 <!-- header -->
 {{template "header.tpl" .}}
 
-This is a test page!ddd
+<p>This is a test page!</p>
 
 <h1>{{.Title}}</h1>

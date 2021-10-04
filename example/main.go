@@ -61,7 +61,7 @@ func main() {
 
 	//start server
 	wg.Add(1)
-	fmt.Println("start example server at :", serverPort)
+	fmt.Printf("start example server at http://localhost:%d\n", serverPort)
 	server.Start()
 
 	wg.Wait()
