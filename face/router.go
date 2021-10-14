@@ -5,6 +5,7 @@ import (
 	"github.com/andyzhou/websocket/iface"
 	"github.com/gorilla/mux"
 	"golang.org/x/net/websocket"
+	"io"
 	"log"
 	"reflect"
 	"sync/atomic"
@@ -147,7 +148,9 @@ func (f *Router) Entry(conn *websocket.Conn) {
 		//receive data from client
 		err = socketReceiver.Receive(conn, &genVal)
 		if err != nil {
-			log.Println("Router:Entry err:", err.Error())
+			if err != io.EOF {
+				log.Println("Router:Entry err:", err.Error())
+			}
 			break
 		}
 		//call cb for received data
