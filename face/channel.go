@@ -149,7 +149,9 @@ func (f *Channel) SendData(data []byte, connIds ... int64) (bRet bool) {
 	}
 
 	//send to chan
-	f.sendChan <- queue
+	select {
+	case f.sendChan <- queue:
+	}
 	bRet = true
 	return
 }
