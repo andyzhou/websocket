@@ -19,7 +19,7 @@ const (
 //send queue
 type sendQueue struct {
 	data []byte
-	connIds []int64
+	connIds []int64 //if not assigned, will send to all.
 }
 
 //face info
@@ -148,7 +148,7 @@ func (f *Channel) SendData(data []byte, connIds ... int64) (bRet bool) {
 		connIds: connIds,
 	}
 
-	//send to chan
+	//async send to chan
 	select {
 	case f.sendChan <- queue:
 	}
