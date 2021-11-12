@@ -27,10 +27,7 @@ func main() {
 	var wg sync.WaitGroup
 
 	//init web socket server
-	server := websocket.NewServer(serverPort)
-
-	//get inter ws
-	ws := server.GetWSServer()
+	ws := websocket.NewServer(serverPort)
 
 	//set static root path
 	ws.SetStaticPath(staticPath)
