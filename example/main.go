@@ -59,11 +59,11 @@ func main() {
 	//start server
 	wg.Add(1)
 	fmt.Printf("start example server at http://localhost:%d\n", serverPort)
-	server.Start()
+	ws.Start()
 
 	wg.Wait()
 	fmt.Println("stop example server..")
-	server.Quit()
+	ws.Quit()
 }
 
 //cb for test http request response

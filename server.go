@@ -37,7 +37,7 @@ type Server struct {
 }
 
 //construct
-func NewWServer(port int) *Server {
+func NewServer(port int) *Server {
 	//self init
 	this := &Server{
 		port: port,
