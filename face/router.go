@@ -125,16 +125,16 @@ func (f *Router) Entry(conn *websocket.Conn) {
 	//init IConn
 	connClient := NewConn(connId, conn)
 
-	//call `OnConnect` of IUserRouter
-	if f.userRouter != nil {
-		f.userRouter.OnConnect(connId)
-	}
-
 	//init web socket receiver
 	socketReceiver := websocket.JSON
 
 	//add connect into channel
 	f.channel.NewConn(connClient)
+
+	//call `OnConnect` of IUserRouter
+	if f.userRouter != nil {
+		f.userRouter.OnConnect(connId)
+	}
 
 	//init general value
 	genVal := make(map[string]interface{})
