@@ -17,6 +17,7 @@ type IWServer interface {
 	GetWsParas(ws *websocket.Conn) map[string]string
 	GetTotalRouter() int64
 	GetRouter(channel string) IRouter
+	GetWSServer() IWServer
 
 	//set
 	SetStaticPath(staticPath string)

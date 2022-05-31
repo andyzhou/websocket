@@ -72,6 +72,10 @@ func (f *Server) Start() {
 	go http.ListenAndServe(f.address, f.hsm)
 }
 
+func (f *Server) GetWSServer() iface.IWServer {
+	return f
+}
+
 //get web socket parameters
 func (f *Server) GetWsParas(ws *websocket.Conn) map[string]string {
 	if ws == nil {
