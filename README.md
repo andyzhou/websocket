@@ -1,5 +1,6 @@
 # websocket
-web socket library, base on go.
+- web socket library, base on go.
+- add gin support
 
 # request ways
 - /file/test.js [for static file request]
