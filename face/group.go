@@ -3,28 +3,25 @@ package face
 import (
 	"errors"
 	"fmt"
+	"github.com/andyzhou/websocket/define"
+	"github.com/andyzhou/websocket/gvar"
+	"github.com/andyzhou/websocket/iface"
+	"golang.org/x/net/websocket"
 	"io"
 	"log"
 	"net"
 	"runtime"
 	"sync"
-	"sync/atomic"
 	"time"
-
-	"github.com/andyzhou/websocket/define"
-	"github.com/andyzhou/websocket/gvar"
-	"github.com/andyzhou/websocket/iface"
-	"golang.org/x/net/websocket"
 )
 
 /*
- * sub bucket face for router
+ * dynamic group face
  */
 
 //face info
-type Bucket struct {
-	bucketId       int
-	conf           *gvar.RouterConf //reference of parent router
+type Group struct {
+	conf     *gvar.GroupConf //group config reference
 	connMap        sync.Map         //connId -> IConnector
 	connects       int64            //total connects
 	writeChan      chan gvar.MsgData
@@ -34,12 +31,11 @@ type Bucket struct {
 }
 
 //construct
-func NewBucket(bucketId int, cfg *gvar.RouterConf) *Bucket {
-	this := &Bucket{
-		bucketId: bucketId,
+func NewGroup(cfg *gvar.GroupConf) *Group {
+	this := &Group{
 		conf: cfg,
 		connMap: sync.Map{},
-		writeChan: make(chan gvar.MsgData, define.DefaultBucketWriteChan),
+		writeChan: make(chan gvar.MsgData, define.DefaultGroupWriteChan),
 		readCloseChan: make(chan bool, 1),
 		writeCloseChan: make(chan bool, 1),
 	}
@@ -47,18 +43,15 @@ func NewBucket(bucketId int, cfg *gvar.RouterConf) *Bucket {
 	return this
 }
 
+
 //quit
-func (f *Bucket) Quit() {
+func (f *Group) Quit() {
 	//force close main loop
 	close(f.writeCloseChan)
 	close(f.readCloseChan)
 
-	//force close with locker
+	//just del record
 	rangeOpt := func(k, v interface{}) bool {
-		conn, ok := v.(iface.IConnector)
-		if ok && conn != nil {
-			conn.Close()
-		}
 		f.connMap.Delete(k)
 		return true
 	}
@@ -69,7 +62,7 @@ func (f *Bucket) Quit() {
 }
 
 //broadcast to connections by condition
-func (f *Bucket) Broadcast(data *gvar.MsgData) error {
+func (f *Group) Cast(data *gvar.MsgData) error {
 	//check
 	if data == nil || data.Data == nil {
 		return errors.New("invalid parameter")
@@ -81,7 +74,7 @@ func (f *Bucket) Broadcast(data *gvar.MsgData) error {
 		return err
 	}
 	if chanIsClosed {
-		return fmt.Errorf("bucket %v write chan had closed", f.bucketId)
+		return fmt.Errorf("group %v write chan had closed", f.conf.GroupId)
 	}
 
 	//send to write chan
@@ -90,57 +83,24 @@ func (f *Bucket) Broadcast(data *gvar.MsgData) error {
 }
 
 //close old connect
-func (f *Bucket) CloseConn(connId int64) error {
+func (f *Group) CloseConn(connId int64) error {
 	//check
 	if connId <= 0 {
 		return errors.New("invalid parameter")
 	}
 
-	//get conn by id
-	connector, err := f.GetConn(connId)
-	if err != nil || connector == nil {
-		return err
-	}
-
-	//force close connect
-	connector.Close()
-
 	//remove conn from map
 	f.connMap.Delete(connId)
-	atomic.AddInt64(&f.connects, -1)
-	if f.connects <= 0 {
-		atomic.StoreInt64(&f.connects, 0)
-		//gc opt
-		runtime.GC()
-	}
 
 	//check and call the closed cb of outside
 	if f.conf != nil && f.conf.CBForClosed != nil {
-		f.conf.CBForClosed(f.conf.Uri, connId)
+		f.conf.CBForClosed(f.conf.GroupId, connId)
 	}
 	return nil
 }
 
-//entrust connect or cancel
-func (f *Bucket) EntrustConn(connId int64, groupId int32, isCancel ...bool) error {
-	//check
-	if connId <= 0 || groupId <= 0 {
-		return errors.New("invalid parameter")
-	}
-
-	//get conn
-	conn, err := f.GetConn(connId)
-	if err != nil {
-		return err
-	}
-
-	//entrust conn or not for group id
-	err = conn.Entrust(groupId, isCancel...)
-	return err
-}
-
 //get old connect
-func (f *Bucket) GetConn(connId int64) (iface.IConnector, error) {
+func (f *Group) GetConn(connId int64) (iface.IConnector, error) {
 	//check
 	if connId <= 0 {
 		return nil, errors.New("invalid parameter")
@@ -159,7 +119,7 @@ func (f *Bucket) GetConn(connId int64) (iface.IConnector, error) {
 }
 
 //add new connect
-func (f *Bucket) AddConn(connId int64, conn *websocket.Conn) error {
+func (f *Group) AddConn(connId int64, conn *websocket.Conn) error {
 	//check
 	if connId <= 0 || conn == nil {
 		return errors.New("invalid parameter")
@@ -170,11 +130,10 @@ func (f *Bucket) AddConn(connId int64, conn *websocket.Conn) error {
 
 	//sync into bucket map with locker
 	f.connMap.Store(connId, connector)
-	atomic.AddInt64(&f.connects, 1)
 
 	//check and call the connected cb of outside
 	if f.conf != nil && f.conf.CBForConnected != nil {
-		f.conf.CBForConnected(f.conf.Uri, connId)
+		f.conf.CBForConnected(f.conf.GroupId, connId)
 	}
 	return nil
 }
@@ -184,14 +143,14 @@ func (f *Bucket) AddConn(connId int64, conn *websocket.Conn) error {
 ////////////////
 
 //read loop
-func (f *Bucket) readLoop() {
+func (f *Group) readLoop() {
 	var (
 		m any = nil
 	)
 	//panic catch
 	defer func() {
 		if err := recover(); err != m {
-			log.Printf("bucket %v read loop panic, err:%v\n", f.bucketId, err)
+			log.Printf("group %v read loop panic, err:%v\n", f.conf.GroupId, err)
 		}
 	}()
 
@@ -204,11 +163,6 @@ func (f *Bucket) readLoop() {
 		//detect connector
 		conn, ok := v.(iface.IConnector)
 		if ok && conn != nil {
-			//if conn is entrusted, do nothing
-			if conn.GetEntrustGroup() > 0 {
-				return true
-			}
-
 			//read data
 			data, err = conn.Read()
 			if err != nil {
@@ -225,7 +179,7 @@ func (f *Bucket) readLoop() {
 				//read data succeed
 				//check and call the read cb of outside
 				if f.conf != nil && f.conf.CBForRead != nil {
-					f.conf.CBForRead(f.conf.Uri, conn.GetConnId(), data)
+					f.conf.CBForRead(f.conf.GroupId, conn.GetConnId(), data)
 				}
 			}
 		}
@@ -253,7 +207,7 @@ func (f *Bucket) readLoop() {
 }
 
 //write loop
-func (f *Bucket) writeLoop() {
+func (f *Group) writeLoop() {
 	var (
 		msgData gvar.MsgData
 		m any = nil
@@ -261,7 +215,7 @@ func (f *Bucket) writeLoop() {
 	//panic catch
 	defer func() {
 		if pErr := recover(); pErr != m {
-			log.Printf("bucket %v wriet loop panic, err:%v\n", f.bucketId, pErr)
+			log.Printf("group %v wriet loop panic, err:%v\n", f.conf.GroupId, pErr)
 		}
 	}()
 
@@ -282,10 +236,6 @@ func (f *Bucket) writeLoop() {
 				if conn == nil {
 					continue
 				}
-				if conn.GetEntrustGroup() > 0 {
-					continue
-				}
-
 				//write to target conn
 				conn.Write(data.Data)
 			}
@@ -296,9 +246,6 @@ func (f *Bucket) writeLoop() {
 		subConnWriteFunc := func(k, v interface{}) bool {
 			conn, ok := v.(iface.IConnector)
 			if ok && conn != nil {
-				if conn.GetEntrustGroup() > 0 {
-					return true
-				}
 				conn.Write(data.Data)
 			}
 			return true
@@ -325,7 +272,7 @@ func (f *Bucket) writeLoop() {
 }
 
 //remove connect
-func (f *Bucket) removeConnect(connId int64) {
+func (f *Group) removeConnect(connId int64) {
 	if connId <= 0 {
 		return
 	}
@@ -333,7 +280,7 @@ func (f *Bucket) removeConnect(connId int64) {
 }
 
 //inter init
-func (f *Bucket) interInit() {
+func (f *Group) interInit() {
 	//spawn read and write loop
 	go f.readLoop()
 	go f.writeLoop()

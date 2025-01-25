@@ -112,6 +112,11 @@ func (f *Server) RegisterRouter(cfg *gvar.RouterConf) error {
 	return nil
 }
 
+//generate message data
+func (f *Server) GenMsgData() *gvar.MsgData {
+	return &gvar.MsgData{}
+}
+
 //generate router config
 func (f *Server) GenRouterCfg() *gvar.RouterConf {
 	return &gvar.RouterConf{}

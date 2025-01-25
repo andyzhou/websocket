@@ -6,17 +6,19 @@ import "golang.org/x/net/websocket"
 type IConnector interface {
 	//gen opt
 	Close()
-	//CloseWithMessage(message string) error
+	CloseWithMessage(message string) error
+	GetEntrustGroup() int32
+	Entrust(groupId int32, isCancel ...bool) error
 
-	//read and send
-	//SendData(data []byte) error
+	//read and write
+	Write(data []byte) error
 	Read() ([]byte, error)
 
-	//get
+	//connect
 	GetConnId() int64
 	GetConn() *websocket.Conn
-	//GetProperty(key string) (interface{}, error)
 
-	//set
+	//property
+	//GetProperty(key string) (interface{}, error)
 	//SetProperty(key string, val interface{}) error
 }
