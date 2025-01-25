@@ -5,7 +5,11 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-//interface of bucket
+/*
+ * @author <AndyZhou>
+ * @mail <diudiu8848@163.com>
+ * interface of bucket
+ */
 type IBucket interface {
 	//gen opt
 	Quit()

@@ -5,7 +5,11 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-//interface of router
+/*
+ * @author <AndyZhou>
+ * @mail <diudiu8848@163.com>
+ * interface of router
+ */
 type IRouter interface {
 	//gen opt
 	Quit()

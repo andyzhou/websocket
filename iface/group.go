@@ -5,7 +5,11 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-//interface of group
+/*
+ * @author <AndyZhou>
+ * @mail <diudiu8848@163.com>
+ * interface of group
+ */
 type IGroup interface {
 	//gen opt
 	Quit()

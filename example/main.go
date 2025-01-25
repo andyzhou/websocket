@@ -7,6 +7,8 @@ import (
 )
 
 /*
+ * @author <AndyZhou>
+ * @mail <diudiu8848@163.com>
  * example code for server side
  */
 

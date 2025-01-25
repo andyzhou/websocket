@@ -2,7 +2,11 @@ package iface
 
 import "golang.org/x/net/websocket"
 
-//interface of websocket connect
+/*
+ * @author <AndyZhou>
+ * @mail <diudiu8848@163.com>
+ * interface of connector
+ */
 type IConnector interface {
 	//gen opt
 	Close()

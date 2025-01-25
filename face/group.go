@@ -16,6 +16,8 @@ import (
 )
 
 /*
+ * @author <AndyZhou>
+ * @mail <diudiu8848@163.com>
  * dynamic group face
  */
 

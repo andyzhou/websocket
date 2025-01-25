@@ -16,6 +16,8 @@ import (
 )
 
 /*
+ * @author <AndyZhou>
+ * @mail <diudiu8848@163.com>
  * websocket server face
  */
 
@@ -25,6 +27,7 @@ type Server struct {
 	hsm       *http.ServeMux //mux http server
 	router    *mux.Router
 	routerMap map[string]iface.IRouter //uri -> IRouter
+	wg        sync.WaitGroup
 	sync.RWMutex
 }
 
@@ -50,6 +53,7 @@ func (f *Server) Quit() {
 
 	//gc opt
 	runtime.GC()
+	f.wg.Done()
 }
 
 //start
@@ -64,8 +68,10 @@ func (f *Server) Start(port int) error {
 	f.hsm.Handle("/", f.router)
 
 	//listen port
+	f.wg.Add(1)
 	go http.ListenAndServe(address, f.hsm)
 
+	f.wg.Wait()
 	return nil
 }
 

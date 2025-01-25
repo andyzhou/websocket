@@ -1,6 +1,8 @@
 package gvar
 
 /*
+ * @author <AndyZhou>
+ * @mail <diudiu8848@163.com>
  * global variables define
  */
 
