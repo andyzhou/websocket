@@ -123,23 +123,23 @@ func (f *Bucket) CloseConn(connId int64) error {
 	return nil
 }
 
-//entrust connect or cancel
-func (f *Bucket) EntrustConn(connId int64, groupId int32, isCancel ...bool) error {
-	//check
-	if connId <= 0 || groupId <= 0 {
-		return errors.New("invalid parameter")
-	}
-
-	//get conn
-	conn, err := f.GetConn(connId)
-	if err != nil {
-		return err
-	}
-
-	//entrust conn or not for group id
-	err = conn.Entrust(groupId, isCancel...)
-	return err
-}
+////entrust connect or cancel
+//func (f *Bucket) EntrustConn(connId int64, groupId int32, isCancel ...bool) error {
+//	//check
+//	if connId <= 0 || groupId <= 0 {
+//		return errors.New("invalid parameter")
+//	}
+//
+//	//get conn
+//	conn, err := f.GetConn(connId)
+//	if err != nil {
+//		return err
+//	}
+//
+//	//entrust conn or not for group id
+//	err = conn.Entrust(groupId, isCancel...)
+//	return err
+//}
 
 //get old connect
 func (f *Bucket) GetConn(connId int64) (iface.IConnector, error) {
@@ -206,10 +206,10 @@ func (f *Bucket) readLoop() {
 		//detect connector
 		conn, ok := v.(iface.IConnector)
 		if ok && conn != nil {
-			//if conn is entrusted, do nothing
-			if conn.GetEntrustGroup() > 0 {
-				return true
-			}
+			////if conn is entrusted, do nothing
+			//if conn.GetEntrustGroup() > 0 {
+			//	return true
+			//}
 
 			//read data
 			data, err = conn.Read()
@@ -284,9 +284,9 @@ func (f *Bucket) writeLoop() {
 				if conn == nil {
 					continue
 				}
-				if conn.GetEntrustGroup() > 0 {
-					continue
-				}
+				//if conn.GetEntrustGroup() > 0 {
+				//	continue
+				//}
 
 				//write to target conn
 				conn.Write(data.Data)
@@ -298,9 +298,9 @@ func (f *Bucket) writeLoop() {
 		subConnWriteFunc := func(k, v interface{}) bool {
 			conn, ok := v.(iface.IConnector)
 			if ok && conn != nil {
-				if conn.GetEntrustGroup() > 0 {
-					return true
-				}
+				//if conn.GetEntrustGroup() > 0 {
+				//	return true
+				//}
 				conn.Write(data.Data)
 			}
 			return true

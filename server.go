@@ -3,6 +3,7 @@ package websocket
 import (
 	"errors"
 	"fmt"
+	"github.com/andyzhou/websocket/define"
 	"net/http"
 	"runtime"
 	"sync"
@@ -23,11 +24,13 @@ import (
 
 //face info
 type Server struct {
-	port      int
-	hsm       *http.ServeMux //mux http server
-	router    *mux.Router
-	routerMap map[string]iface.IRouter //uri -> IRouter
-	wg        sync.WaitGroup
+	port          int
+	hsm           *http.ServeMux //mux http server
+	router        *mux.Router
+	routerMap     map[string]iface.IRouter  //persistent routers, uri -> IRouter
+	dynamicMap    map[string]iface.IDynamic //dynamic groups, uri -> IDynamic
+	wg            sync.WaitGroup
+	dynamicLocker sync.RWMutex
 	sync.RWMutex
 }
 
@@ -37,6 +40,7 @@ func NewServer() *Server {
 		hsm: http.NewServeMux(),
 		router: mux.NewRouter(),
 		routerMap: map[string]iface.IRouter{},
+		dynamicMap: map[string]iface.IDynamic{},
 	}
 	return this
 }
@@ -49,6 +53,14 @@ func (f *Server) Quit() {
 	for k, v := range f.routerMap {
 		v.Quit()
 		delete(f.routerMap, k)
+	}
+
+	//force close dynamic groups
+	f.dynamicLocker.Lock()
+	defer f.dynamicLocker.Unlock()
+	for k, v := range f.dynamicMap {
+		v.Quit()
+		delete(f.dynamicMap, k)
 	}
 
 	//gc opt
@@ -75,6 +87,16 @@ func (f *Server) Start(port int) error {
 	return nil
 }
 
+//get all routers
+func (f *Server) GetAllRouters() map[string]iface.IRouter {
+	return f.routerMap
+}
+
+//get all dynamics
+func (f *Server) GetAllDynamics() map[string]iface.IDynamic {
+	return f.dynamicMap
+}
+
 //get router by uri
 func (f *Server) GetRouter(uri string) (iface.IRouter, error) {
 	//check
@@ -92,7 +114,53 @@ func (f *Server) GetRouter(uri string) (iface.IRouter, error) {
 	return v, nil
 }
 
-//register new router
+//get dynamic by uri
+func (f *Server) GetDynamic(uri string) (iface.IDynamic, error) {
+	//check
+	if uri == "" {
+		return nil, errors.New("invalid parameter")
+	}
+
+	//get by uri with locker
+	f.dynamicLocker.Lock()
+	defer f.dynamicLocker.Unlock()
+	v, ok := f.dynamicMap[uri]
+	if !ok || v == nil {
+		return nil, errors.New("no such dynamic")
+	}
+	return v, nil
+}
+
+//register new dynamic router
+func (f *Server) RegisterDynamic(cfg *gvar.GroupConf) error {
+	//check
+	if cfg == nil || cfg.Uri == "" {
+		return errors.New("invalid parameter")
+	}
+
+	//check old
+	oldDynamic, _ := f.GetDynamic(cfg.Uri)
+	if oldDynamic != nil {
+		return errors.New("this uri dynamic had exists")
+	}
+
+	//init new sub dynamic face
+	subDynamic := face.NewDynamic(cfg)
+
+	//format dynamic uri with path para
+	uriWithPathPara := fmt.Sprintf("%v/{%v}", cfg.Uri, define.GroupPathParaName)
+
+	//add websocket sub router handle
+	f.router.Handle(uriWithPathPara, websocket.Handler(subDynamic.Entry))
+
+	//sync into running map with locker
+	f.Lock()
+	defer f.Unlock()
+	f.dynamicMap[cfg.Uri] = subDynamic
+	return nil
+}
+
+//register new persistent router
 func (f *Server) RegisterRouter(cfg *gvar.RouterConf) error {
 	//check
 	if cfg == nil || cfg.Uri == "" {
@@ -121,6 +189,11 @@ func (f *Server) RegisterRouter(cfg *gvar.RouterConf) error {
 //generate message data
 func (f *Server) GenMsgData() *gvar.MsgData {
 	return &gvar.MsgData{}
+}
+
+//generate group config
+func (f *Server) GenGroupCfg() *gvar.GroupConf {
+	return &gvar.GroupConf{}
 }
 
 //generate router config

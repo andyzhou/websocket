@@ -11,8 +11,7 @@ type IConnector interface {
 	//gen opt
 	Close()
 	CloseWithMessage(message string) error
-	GetEntrustGroup() int32
-	Entrust(groupId int32, isCancel ...bool) error
+	GetUriParas() map[string]string
 
 	//read and write
 	Write(data []byte) error

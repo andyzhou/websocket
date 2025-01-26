@@ -9,7 +9,7 @@ import (
 /*
  * @author <AndyZhou>
  * @mail <diudiu8848@163.com>
- * example code for server side
+ * router example code for server side
  */
 
 const (
@@ -40,12 +40,12 @@ func cbForReadData(uri string, connId int64, data []byte) error {
 	log.Printf("example.cbForReadData, connId:%v, data:%v\n", connId, string(data))
 	//cast to all
 	if s != nil {
-		subRouter, _ := s.GetRouter(WsUri)
+		subRouter, _ := s.GetRouter(uri)
 		if subRouter != nil {
 			//format msg data
 			msgData := s.GenMsgData()
 			msgData.Data = data
-			subRouter.Broadcast(msgData)
+			subRouter.Cast(msgData)
 		}
 	}
 	return nil

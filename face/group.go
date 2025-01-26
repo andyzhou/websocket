@@ -12,6 +12,7 @@ import (
 	"net"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -23,9 +24,10 @@ import (
 
 //face info
 type Group struct {
-	conf     *gvar.GroupConf //group config reference
-	connMap        sync.Map         //connId -> IConnector
-	connects       int64            //total connects
+	groupId        int32
+	conf           *gvar.GroupConf //group config reference
+	connMap        sync.Map        //connId -> IConnector
+	connects       int32           //total connects
 	writeChan      chan gvar.MsgData
 	readCloseChan  chan bool
 	writeCloseChan chan bool
@@ -33,8 +35,9 @@ type Group struct {
 }
 
 //construct
-func NewGroup(cfg *gvar.GroupConf) *Group {
+func NewGroup(groupId int32, cfg *gvar.GroupConf) *Group {
 	this := &Group{
+		groupId: groupId,
 		conf: cfg,
 		connMap: sync.Map{},
 		writeChan: make(chan gvar.MsgData, define.DefaultGroupWriteChan),
@@ -76,7 +79,7 @@ func (f *Group) Cast(data *gvar.MsgData) error {
 		return err
 	}
 	if chanIsClosed {
-		return fmt.Errorf("group %v write chan had closed", f.conf.GroupId)
+		return fmt.Errorf("group %v write chan had closed", f.groupId)
 	}
 
 	//send to write chan
@@ -96,7 +99,12 @@ func (f *Group) CloseConn(connId int64) error {
 
 	//check and call the closed cb of outside
 	if f.conf != nil && f.conf.CBForClosed != nil {
-		f.conf.CBForClosed(f.conf.GroupId, connId)
+		f.conf.CBForClosed(f.conf.Uri, f.groupId, connId)
+	}
+	atomic.AddInt32(&f.connects, -1)
+	if f.connects <= 0 {
+		atomic.StoreInt32(&f.connects, 0)
+		runtime.GC()
 	}
 	return nil
 }
@@ -135,8 +143,10 @@ func (f *Group) AddConn(connId int64, conn *websocket.Conn) error {
 
 	//check and call the connected cb of outside
 	if f.conf != nil && f.conf.CBForConnected != nil {
-		f.conf.CBForConnected(f.conf.GroupId, connId)
+		f.conf.CBForConnected(f.conf.Uri, f.groupId, connId)
 	}
+	atomic.AddInt32(&f.connects, 1)
+
 	return nil
 }
 
@@ -152,7 +162,7 @@ func (f *Group) readLoop() {
 	//panic catch
 	defer func() {
 		if err := recover(); err != m {
-			log.Printf("group %v read loop panic, err:%v\n", f.conf.GroupId, err)
+			log.Printf("group %v read loop panic, err:%v\n", f.groupId, err)
 		}
 	}()
 
@@ -181,7 +191,7 @@ func (f *Group) readLoop() {
 				//read data succeed
 				//check and call the read cb of outside
 				if f.conf != nil && f.conf.CBForRead != nil {
-					f.conf.CBForRead(f.conf.GroupId, conn.GetConnId(), data)
+					f.conf.CBForRead(f.conf.Uri, f.groupId, conn.GetConnId(), data)
 				}
 			}
 		}
@@ -217,7 +227,7 @@ func (f *Group) writeLoop() {
 	//panic catch
 	defer func() {
 		if pErr := recover(); pErr != m {
-			log.Printf("group %v wriet loop panic, err:%v\n", f.conf.GroupId, pErr)
+			log.Printf("group %v wriet loop panic, err:%v\n", f.groupId, pErr)
 		}
 	}()
 
@@ -283,6 +293,9 @@ func (f *Group) removeConnect(connId int64) {
 
 //inter init
 func (f *Group) interInit() {
+	//init counter
+	atomic.StoreInt32(&f.connects, 0)
+
 	//spawn read and write loop
 	go f.readLoop()
 	go f.writeLoop()

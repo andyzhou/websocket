@@ -2,6 +2,7 @@ package face
 
 import (
 	"errors"
+	"github.com/gorilla/mux"
 	"time"
 
 	"golang.org/x/net/websocket"
@@ -17,7 +18,6 @@ import (
 type Connector struct {
 	connId         int64           //origin conn id
 	conn           *websocket.Conn //origin conn reference
-	entrustGroupId int32           //entrusted by group id
 }
 
 //construct
@@ -60,31 +60,12 @@ func (f *Connector) GetConnId() int64 {
 	return f.connId
 }
 
-//get entrusted group id
-func (f *Connector) GetEntrustGroup() int32 {
-	return f.entrustGroupId
-}
-
-//entrust or not group id
-func (f *Connector) Entrust(groupId int32, isCancel ...bool) error {
-	var (
-		cancelOpt bool
-	)
-	//check
-	if groupId <= 0 {
-		return errors.New("invalid parameter")
+//get uri paras
+func (f *Connector) GetUriParas() map[string]string {
+	if f.conn == nil {
+		return nil
 	}
-	//check cancel opt
-	if isCancel != nil && len(isCancel) > 0 {
-		cancelOpt = isCancel[0]
-	}
-
-	if cancelOpt {
-		f.entrustGroupId = 0
-	}else{
-		f.entrustGroupId = groupId
-	}
-	return nil
+	return mux.Vars(f.conn.Request())
 }
 
 //get origin connect reference

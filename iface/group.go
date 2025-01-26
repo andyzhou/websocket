@@ -8,7 +8,7 @@ import (
 /*
  * @author <AndyZhou>
  * @mail <diudiu8848@163.com>
- * interface of group
+ * interface of group, this will be removed!!!
  */
 type IGroup interface {
 	//gen opt
