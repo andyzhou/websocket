@@ -22,7 +22,10 @@ type (
 
 	//dynamic group conf
 	GroupConf struct {
-		Uri              string //format as `/group/{groupId}`
+		//general
+		Uri              string //final format like `/<orgUri>/{groupId}`
+
+		//cb func for websocket
 		CBForGenConnId   func() int64
 		CBForVerifyGroup func(routerUri string, groupId int32) error
 		CBForConnected   func(routerUri string, groupId int32, connId int64) error

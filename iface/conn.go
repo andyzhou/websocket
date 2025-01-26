@@ -20,8 +20,4 @@ type IConnector interface {
 	//connect
 	GetConnId() int64
 	GetConn() *websocket.Conn
-
-	//property
-	//GetProperty(key string) (interface{}, error)
-	//SetProperty(key string, val interface{}) error
 }

@@ -26,8 +26,6 @@ type Router struct {
 	connId      int64                  //inter atomic conn id counter
 	buckets     int                    //total buckets
 	bucketMap   map[int]iface.IBucket  //bucket map
-	//groupMap    map[int32]iface.IGroup //dynamic group map
-	//groupLocker sync.RWMutex
 	sync.RWMutex
 }
 
@@ -36,7 +34,6 @@ func NewRouter(cfg *gvar.RouterConf) *Router {
 	this := &Router{
 		cfg: cfg,
 		bucketMap: map[int]iface.IBucket{},
-		//groupMap: map[int32]iface.IGroup{},
 	}
 	this.interInit()
 	return this
@@ -44,14 +41,6 @@ func NewRouter(cfg *gvar.RouterConf) *Router {
 
 //quit
 func (f *Router) Quit()  {
-	////clear groups
-	//f.groupLocker.Lock()
-	//defer f.groupLocker.Unlock()
-	//for k, v := range f.groupMap {
-	//	v.Quit()
-	//	delete(f.groupMap, k)
-	//}
-
 	//clear buckets
 	f.Lock()
 	defer f.Unlock()
@@ -140,143 +129,9 @@ func (f *Router) Entry(conn *websocket.Conn) {
 	select {}
 }
 
-////del dynamic group
-//func (f *Router) DelGroup(groupId int32) error {
-//	//check
-//	if groupId <= 0 {
-//		return errors.New("invalid parameter")
-//	}
-//
-//	//get old group
-//	oldGroup, _ := f.getGroup(groupId)
-//	if oldGroup == nil {
-//		return errors.New("can't get group")
-//	}
-//
-//	//old group quit
-//	oldGroup.Quit()
-//
-//	//del with locker
-//	f.groupLocker.Lock()
-//	defer f.groupLocker.Unlock()
-//	delete(f.groupMap, groupId)
-//
-//	//gc opt
-//	if len(f.groupMap) <= 0 {
-//		runtime.GC()
-//	}
-//
-//	return nil
-//}
-//
-////get dynamic group
-//func (f *Router) GetGroup(groupId int32) (iface.IGroup, error) {
-//	//check
-//	if groupId <= 0 {
-//		return nil, errors.New("invalid parameter")
-//	}
-//	return f.getGroup(groupId)
-//}
-//
-////join dynamic group
-////this will entrust connect to target group
-//func (f *Router) JoinGroup(groupId int32, connId int64, isCancel...bool) error {
-//	var (
-//		cancelOpt bool
-//	)
-//	//check
-//	if groupId <= 0 || connId <= 0 {
-//		return errors.New("invalid parameter")
-//	}
-//	if isCancel != nil && len(isCancel) > 0 {
-//		cancelOpt = isCancel[0]
-//	}
-//
-//	//get target group
-//	targetGroup, _ := f.getGroup(groupId)
-//	if targetGroup == nil {
-//		return errors.New("can't get target group")
-//	}
-//
-//	//get target bucket by conn id
-//	targetBucket, err := f.getBucketByConnId(connId)
-//	if err != nil {
-//		return err
-//	}
-//	if targetBucket == nil {
-//		return errors.New("can't get target bucket")
-//	}
-//
-//	//entrust connect to target group or cancel
-//	err = targetBucket.EntrustConn(connId, groupId, isCancel...)
-//	if err != nil {
-//		return err
-//	}
-//
-//	if cancelOpt {
-//		//cancel entrust opt
-//		targetGroup.CloseConn(connId)
-//		err = targetBucket.EntrustConn(connId, groupId, true)
-//	}else{
-//		//entrust opt
-//		//get conn reference and fill into target group
-//		conn, _ := targetBucket.GetConn(connId)
-//		if conn != nil {
-//			err = targetGroup.AddConn(connId, conn.GetConn())
-//		}else{
-//			err = errors.New("can't get target conn")
-//		}
-//	}
-//	return err
-//}
-//
-////create dynamic group
-//func (f *Router) CreateGroup(conf *gvar.GroupConf) (iface.IGroup, error) {
-//	//check
-//	if conf == nil {
-//		return nil, errors.New("invalid parameter")
-//	}
-//
-//	//check or gen group id
-//	if conf.GroupId <= 0 {
-//		conf.GroupId = atomic.AddInt32(&f.groupId, 1)
-//	}
-//
-//	//check group
-//	oldGroup, _ := f.getGroup(conf.GroupId)
-//	if oldGroup != nil {
-//		return oldGroup, nil
-//	}
-//
-//	//init new group with locker
-//	newGroup := NewGroup(conf)
-//	f.groupLocker.Lock()
-//	defer f.groupLocker.Unlock()
-//	f.groupMap[conf.GroupId] = newGroup
-//
-//	return newGroup, nil
-//}
-
 ////////////////
 //private func
 ////////////////
-
-////get group by id
-//func (f *Router) getGroup(groupId int32) (iface.IGroup, error) {
-//	//check
-//	if groupId <= 0 {
-//		return nil, errors.New("invalid parameter")
-//	}
-//
-//	//get with locker
-//	f.groupLocker.Lock()
-//	defer f.groupLocker.Unlock()
-//	v, ok := f.groupMap[groupId]
-//	if !ok || v == nil {
-//		return nil, errors.New("no such group")
-//	}
-//	return v, nil
-//}
 
 //get bucket by idx
 func (f *Router) getBucket(idx int) (iface.IBucket, error) {
