@@ -1,5 +1,7 @@
 package gvar
 
+import "time"
+
 /*
  * @author <AndyZhou>
  * @mail <diudiu8848@163.com>
@@ -10,8 +12,10 @@ type (
 	//persistent router conf
 	RouterConf struct {
 		//general
-		Uri     string
-		Buckets int
+		Uri          string
+		Buckets      int
+		ReadTimeout  time.Duration
+		WriteTimeout time.Duration
 
 		//cb func for websocket
 		CBForGenConnId func() int64
@@ -23,7 +27,9 @@ type (
 	//dynamic group conf
 	GroupConf struct {
 		//general
-		Uri              string //final format like `/<orgUri>/{groupId}`
+		Uri          string //final format like `/<orgUri>/{groupId}`
+		ReadTimeout  time.Duration
+		WriteTimeout time.Duration
 
 		//cb func for websocket
 		CBForGenConnId   func() int64

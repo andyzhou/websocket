@@ -16,16 +16,23 @@ import (
 
 //face info
 type Connector struct {
-	connId         int64           //origin conn id
-	conn           *websocket.Conn //origin conn reference
+	connId       int64           //origin conn id
+	conn         *websocket.Conn //origin conn reference
+	readTimeout  time.Duration
+	writeTimeout time.Duration
 }
 
 //construct
-func NewConnector(connId int64, conn *websocket.Conn) *Connector {
+//timeouts=> readTimeout, writeTimeout
+func NewConnector(
+	connId int64,
+	conn *websocket.Conn,
+	timeouts ...time.Duration) *Connector {
 	this := &Connector{
 		connId: connId,
 		conn: conn,
 	}
+	this.interInit(timeouts...)
 	return this
 }
 
@@ -84,7 +91,7 @@ func (f *Connector) Write(data []byte) error {
 	}
 
 	//set write deadline
-	f.conn.SetWriteDeadline(time.Now().Add(time.Second))
+	f.conn.SetWriteDeadline(time.Now().Add(f.writeTimeout))
 
 	//send real data
 	err := websocket.Message.Send(f.conn, string(data))
@@ -102,9 +109,32 @@ func (f *Connector) Read() ([]byte, error) {
 	}
 
 	//set read deadline
-	f.conn.SetReadDeadline(time.Now().Add(time.Second))
+	f.conn.SetReadDeadline(time.Now().Add(f.readTimeout))
 
 	//receive data
 	err := websocket.Message.Receive(f.conn, &data)
 	return data, err
+}
+
+//inter init
+func (f *Connector) interInit(timeouts ...time.Duration) {
+	//setup timeouts
+	timeoutsLen := len(timeouts)
+	switch timeoutsLen {
+	case 1:
+		{
+			f.readTimeout = timeouts[0]
+		}
+	case 2:
+		{
+			f.readTimeout = timeouts[0]
+			f.writeTimeout = timeouts[1]
+		}
+	}
+	if f.readTimeout <= 0 {
+		f.readTimeout = time.Second
+	}
+	if f.writeTimeout <= 0 {
+		f.writeTimeout = time.Second
+	}
 }

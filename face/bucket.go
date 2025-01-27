@@ -21,6 +21,7 @@ import (
  * @author <AndyZhou>
  * @mail <diudiu8848@163.com>
  * sub bucket face for router
+ * - one bucket service batch connections
  */
 
 //face info

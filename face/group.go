@@ -20,6 +20,8 @@ import (
  * @author <AndyZhou>
  * @mail <diudiu8848@163.com>
  * dynamic group face
+ * - one group id, one group obj
+ * - all connect in one group
  */
 
 //face info
