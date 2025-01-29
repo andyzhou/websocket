@@ -94,7 +94,7 @@ func (f *Connector) Write(data []byte) error {
 	f.conn.SetWriteDeadline(time.Now().Add(f.writeTimeout))
 
 	//send real data
-	err := websocket.Message.Send(f.conn, string(data))
+	err := websocket.Message.Send(f.conn, data)
 	return err
 }
 
