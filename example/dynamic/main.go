@@ -24,27 +24,27 @@ var (
 )
 
 //cb for closed
-func cbForClosed(uri string, groupId int32, connId int64) error {
+func cbForClosed(uri string, groupId int64, connId int64) error {
 	log.Printf("example.cbForClosed, uri:%v, groupId:%v, connId:%v\n",
 			uri, groupId, connId)
 	return nil
 }
 
 //cb for connected
-func cbForConnected(uri string, groupId int32, connId int64) error {
+func cbForConnected(uri string, groupId int64, connId int64) error {
 	log.Printf("example.cbForConnected, uri:%v, groupId:%v, connId:%v\n",
 		uri, groupId, connId)
 	return nil
 }
 
 //cb for verify group
-func cbForVerifyGroup(uri string, groupId int32) error {
+func cbForVerifyGroup(uri string, groupId int64) error {
 	log.Printf("example.cbForVerifyGroup, uri:%v, groupId:%v\n", uri, groupId)
 	return nil
 }
 
 //cb for read data from client sent
-func cbForReadData(uri string, groupId int32, connId int64, data []byte) error {
+func cbForReadData(uri string, groupId int64, connId int64, data []byte) error {
 	log.Printf("example.cbForReadData, uri:%v, groupId:%v, connId:%v, data:%v\n",
 				uri, groupId, connId, string(data))
 	//cast to all

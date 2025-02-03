@@ -26,7 +26,7 @@ import (
 
 //face info
 type Group struct {
-	groupId        int32
+	groupId        int64
 	conf           *gvar.GroupConf //group config reference
 	connMap        sync.Map        //connId -> IConnector
 	connects       int32           //total connects
@@ -37,7 +37,7 @@ type Group struct {
 }
 
 //construct
-func NewGroup(groupId int32, cfg *gvar.GroupConf) *Group {
+func NewGroup(groupId int64, cfg *gvar.GroupConf) *Group {
 	this := &Group{
 		groupId: groupId,
 		conf: cfg,

@@ -33,10 +33,10 @@ type (
 
 		//cb func for websocket
 		CBForGenConnId   func() int64
-		CBForVerifyGroup func(routerUri string, groupId int32) error
-		CBForConnected   func(routerUri string, groupId int32, connId int64) error
-		CBForClosed      func(routerUri string, groupId int32, connId int64) error
-		CBForRead        func(routerUri string, groupId int32, connId int64, message []byte) error
+		CBForVerifyGroup func(routerUri string, groupId int64) error
+		CBForConnected   func(routerUri string, groupId int64, connId int64) error
+		CBForClosed      func(routerUri string, groupId int64, connId int64) error
+		CBForRead        func(routerUri string, groupId int64, connId int64, message []byte) error
 	}
 
 	MsgData struct {

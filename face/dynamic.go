@@ -25,7 +25,7 @@ import (
 type Dynamic struct {
 	cfg      *gvar.GroupConf        //router origin conf reference
 	connId   int64                  //inter atomic conn id counter
-	groupMap map[int32]iface.IGroup //dynamic group map
+	groupMap map[int64]iface.IGroup //dynamic group map
 	sync.RWMutex
 }
 
@@ -33,7 +33,7 @@ type Dynamic struct {
 func NewDynamic(cfg *gvar.GroupConf) *Dynamic {
 	this := &Dynamic{
 		cfg: cfg,
-		groupMap: map[int32]iface.IGroup{},
+		groupMap: map[int64]iface.IGroup{},
 	}
 	this.interInit()
 	return this
@@ -56,7 +56,7 @@ func (f *Dynamic) GetConf() *gvar.GroupConf {
 }
 
 //get group by id
-func (f *Dynamic) GetGroup(groupId int32) (iface.IGroup, error) {
+func (f *Dynamic) GetGroup(groupId int64) (iface.IGroup, error) {
 	//check
 	if groupId <= 0 {
 		return nil, errors.New("invalid parameter")
@@ -73,7 +73,7 @@ func (f *Dynamic) GetGroup(groupId int32) (iface.IGroup, error) {
 }
 
 //cast message
-func (f *Dynamic) Cast(groupId int32, msg *gvar.MsgData) error {
+func (f *Dynamic) Cast(groupId int64, msg *gvar.MsgData) error {
 	//check
 	if groupId <= 0 || msg == nil || msg.Data == nil {
 		return errors.New("invalid parameter")
@@ -138,7 +138,7 @@ func (f *Dynamic) Entry(conn *websocket.Conn) {
 ////////////////
 
 //create new group
-func (f *Dynamic) createGroup(groupId int32) (iface.IGroup, error) {
+func (f *Dynamic) createGroup(groupId int64) (iface.IGroup, error) {
 	//check
 	if groupId <= 0 {
 		return nil, errors.New("invalid parameter")
@@ -155,7 +155,7 @@ func (f *Dynamic) createGroup(groupId int32) (iface.IGroup, error) {
 }
 
 //get and verify group id para
-func (f *Dynamic) getAndVerifyGroupId(conn *websocket.Conn) (int32, error) {
+func (f *Dynamic) getAndVerifyGroupId(conn *websocket.Conn) (int64, error) {
 	//get group id from path para
 	params := mux.Vars(conn.Request())
 	if params == nil {
@@ -174,13 +174,13 @@ func (f *Dynamic) getAndVerifyGroupId(conn *websocket.Conn) (int32, error) {
 
 	//check the cb for verify group and run it
 	if f.cfg != nil && f.cfg.CBForVerifyGroup != nil {
-		err := f.cfg.CBForVerifyGroup(f.cfg.Uri, int32(groupIdInt))
+		err := f.cfg.CBForVerifyGroup(f.cfg.Uri, groupIdInt)
 		if err != nil {
 			return 0, err
 		}
-		return int32(groupIdInt), nil
+		return groupIdInt, nil
 	}
-	return int32(groupIdInt), nil
+	return groupIdInt, nil
 }
 
 //inter init
