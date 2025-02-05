@@ -19,9 +19,9 @@ type (
 
 		//cb func for websocket
 		CBForGenConnId func() int64
-		CBForConnected func(routerUri string, connId int64) error
-		CBForClosed    func(routerUri string, connId int64) error
-		CBForRead      func(routerUri string, connId int64, message []byte) error
+		CBForConnected func(router interface{}, connId int64) error
+		CBForClosed    func(router interface{}, connId int64) error
+		CBForRead      func(router interface{}, connId int64, message []byte) error
 	}
 
 	//dynamic group conf
@@ -33,10 +33,10 @@ type (
 
 		//cb func for websocket
 		CBForGenConnId   func() int64
-		CBForVerifyGroup func(routerUri string, groupId int64) error
-		CBForConnected   func(routerUri string, groupId int64, connId int64) error
-		CBForClosed      func(routerUri string, groupId int64, connId int64) error
-		CBForRead        func(routerUri string, groupId int64, connId int64, message []byte) error
+		CBForVerifyGroup func(groupObj interface{}, groupId int64) error
+		CBForConnected   func(groupObj interface{}, groupId int64, connId int64) error
+		CBForClosed      func(groupObj interface{}, groupId int64, connId int64) error
+		CBForRead        func(groupObj interface{}, groupId int64, connId int64, message []byte) error
 	}
 
 	MsgData struct {

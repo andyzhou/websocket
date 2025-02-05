@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"github.com/andyzhou/websocket"
+	"github.com/andyzhou/websocket/iface"
 	"log"
 	"sync"
 )
@@ -24,30 +26,38 @@ var (
 )
 
 //cb for closed
-func cbForClosed(uri string, connId int64) error {
-	log.Printf("example.cbForClosed, uri:%v, connId:%v\n", uri, connId)
+func cbForClosed(router interface{}, connId int64) error {
+	routerObj, _ := router.(iface.IRouter)
+	if routerObj == nil {
+		return errors.New("invalid router")
+	}
+	log.Printf("example.cbForClosed, connId:%v\n", connId)
 	return nil
 }
 
 //cb for connected
-func cbForConnected(uri string, connId int64) error {
-	log.Printf("example.cbForConnected, uri:%v, connId:%v\n", uri, connId)
+func cbForConnected(router interface{}, connId int64) error {
+	routerObj, _ := router.(iface.IRouter)
+	if routerObj == nil {
+		return errors.New("invalid router")
+	}
+	log.Printf("example.cbForConnected, connId:%v\n", connId)
 	return nil
 }
 
 //cb for read data from client sent
-func cbForReadData(uri string, connId int64, data []byte) error {
-	log.Printf("example.cbForReadData, uri:%v, connId:%v, data:%v\n", uri, connId, string(data))
-	//cast to all
-	if s != nil {
-		subRouter, _ := s.GetRouter(uri)
-		if subRouter != nil {
-			//format msg data
-			msgData := s.GenMsgData()
-			msgData.Data = data
-			subRouter.Cast(msgData)
-		}
+func cbForReadData(router interface{}, connId int64, data []byte) error {
+	routerObj, _ := router.(iface.IRouter)
+	if routerObj == nil {
+		return errors.New("invalid router")
 	}
+	log.Printf("example.cbForReadData, connId:%v, data:%v\n", connId, string(data))
+	//format msg data
+	msgData := s.GenMsgData()
+	msgData.Data = data
+
+	//cast to all
+	routerObj.Cast(msgData)
 	return nil
 }
 

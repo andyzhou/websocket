@@ -27,6 +27,7 @@ import (
 //face info
 type Bucket struct {
 	bucketId       int
+	router         iface.IRouter    //reference
 	conf           *gvar.RouterConf //reference of parent router
 	connMap        sync.Map         //connId -> IConnector
 	connects       int64            //total connects
@@ -37,8 +38,9 @@ type Bucket struct {
 }
 
 //construct
-func NewBucket(bucketId int, cfg *gvar.RouterConf) *Bucket {
+func NewBucket(router iface.IRouter, bucketId int, cfg *gvar.RouterConf) *Bucket {
 	this := &Bucket{
+		router: router,
 		bucketId: bucketId,
 		conf: cfg,
 		connMap: sync.Map{},
@@ -119,7 +121,7 @@ func (f *Bucket) CloseConn(connId int64) error {
 
 	//check and call the closed cb of outside
 	if f.conf != nil && f.conf.CBForClosed != nil {
-		f.conf.CBForClosed(f.conf.Uri, connId)
+		f.conf.CBForClosed(f.router, connId)
 	}
 	return nil
 }
@@ -159,7 +161,7 @@ func (f *Bucket) AddConn(connId int64, conn *websocket.Conn) error {
 
 	//check and call the connected cb of outside
 	if f.conf != nil && f.conf.CBForConnected != nil {
-		f.conf.CBForConnected(f.conf.Uri, connId)
+		f.conf.CBForConnected(f.router, connId)
 	}
 	return nil
 }
@@ -205,7 +207,7 @@ func (f *Bucket) readLoop() {
 				//read data succeed
 				//check and call the read cb of outside
 				if f.conf != nil && f.conf.CBForRead != nil {
-					f.conf.CBForRead(f.conf.Uri, conn.GetConnId(), data)
+					f.conf.CBForRead(f.router, conn.GetConnId(), data)
 				}
 			}
 		}

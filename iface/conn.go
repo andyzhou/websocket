@@ -13,6 +13,10 @@ type IConnector interface {
 	CloseWithMessage(message string) error
 	GetUriParas() map[string]string
 
+	//owner id
+	GetOwnerId() int64
+	SetOwnerId(ownerId int64)
+
 	//read and write
 	Write(data []byte) error
 	Read() ([]byte, error)

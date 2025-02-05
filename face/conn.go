@@ -17,6 +17,7 @@ import (
 //face info
 type Connector struct {
 	connId       int64           //origin conn id
+	ownerId 	 int64
 	conn         *websocket.Conn //origin conn reference
 	readTimeout  time.Duration
 	writeTimeout time.Duration
@@ -42,6 +43,16 @@ func (f *Connector) Close() {
 		f.conn.Close()
 		f.conn = nil
 	}
+}
+
+//get owner id
+func (f *Connector) GetOwnerId() int64 {
+	return f.ownerId
+}
+
+//set owner id
+func (f *Connector) SetOwnerId(ownerId int64) {
+	f.ownerId = ownerId
 }
 
 //close with message

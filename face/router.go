@@ -180,7 +180,7 @@ func (f *Router) interInit() {
 	f.Lock()
 	defer f.Unlock()
 	for i := 0; i < f.buckets; i++ {
-		bucket := NewBucket(i, f.cfg)
+		bucket := NewBucket(f, i, f.cfg)
 		f.bucketMap[i] = bucket
 	}
 }

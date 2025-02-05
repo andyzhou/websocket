@@ -101,7 +101,7 @@ func (f *Group) CloseConn(connId int64) error {
 
 	//check and call the closed cb of outside
 	if f.conf != nil && f.conf.CBForClosed != nil {
-		f.conf.CBForClosed(f.conf.Uri, f.groupId, connId)
+		f.conf.CBForClosed(f, f.groupId, connId)
 	}
 	atomic.AddInt32(&f.connects, -1)
 	if f.connects <= 0 {
@@ -145,7 +145,7 @@ func (f *Group) AddConn(connId int64, conn *websocket.Conn) error {
 
 	//check and call the connected cb of outside
 	if f.conf != nil && f.conf.CBForConnected != nil {
-		f.conf.CBForConnected(f.conf.Uri, f.groupId, connId)
+		f.conf.CBForConnected(f, f.groupId, connId)
 	}
 	atomic.AddInt32(&f.connects, 1)
 
@@ -193,7 +193,7 @@ func (f *Group) readLoop() {
 				//read data succeed
 				//check and call the read cb of outside
 				if f.conf != nil && f.conf.CBForRead != nil {
-					f.conf.CBForRead(f.conf.Uri, f.groupId, conn.GetConnId(), data)
+					f.conf.CBForRead(f, f.groupId, conn.GetConnId(), data)
 				}
 			}
 		}

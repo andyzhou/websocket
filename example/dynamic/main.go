@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"github.com/andyzhou/websocket"
+	"github.com/andyzhou/websocket/iface"
 	"log"
 	"sync"
 )
@@ -24,39 +26,46 @@ var (
 )
 
 //cb for closed
-func cbForClosed(uri string, groupId int64, connId int64) error {
-	log.Printf("example.cbForClosed, uri:%v, groupId:%v, connId:%v\n",
-			uri, groupId, connId)
+func cbForClosed(group interface{}, groupId int64, connId int64) error {
+	groupObj, _ := group.(iface.IGroup)
+	if groupObj == nil {
+		return errors.New("invalid group obj")
+	}
+	log.Printf("example.cbForClosed, groupId:%v, connId:%v\n", groupId, connId)
 	return nil
 }
 
 //cb for connected
-func cbForConnected(uri string, groupId int64, connId int64) error {
-	log.Printf("example.cbForConnected, uri:%v, groupId:%v, connId:%v\n",
-		uri, groupId, connId)
+func cbForConnected(group interface{}, groupId int64, connId int64) error {
+	groupObj, _ := group.(iface.IGroup)
+	if groupObj == nil {
+		return errors.New("invalid group obj")
+	}
+	log.Printf("example.cbForConnected, groupId:%v, connId:%v\n", groupId, connId)
 	return nil
 }
 
 //cb for verify group
-func cbForVerifyGroup(uri string, groupId int64) error {
-	log.Printf("example.cbForVerifyGroup, uri:%v, groupId:%v\n", uri, groupId)
+func cbForVerifyGroup(group interface{}, groupId int64) error {
+	log.Printf("example.cbForVerifyGroup, groupId:%v\n", groupId)
 	return nil
 }
 
 //cb for read data from client sent
-func cbForReadData(uri string, groupId int64, connId int64, data []byte) error {
-	log.Printf("example.cbForReadData, uri:%v, groupId:%v, connId:%v, data:%v\n",
-				uri, groupId, connId, string(data))
-	//cast to all
-	if s != nil {
-		subDynamic, _ := s.GetDynamic(uri)
-		if subDynamic != nil {
-			//format msg data
-			msgData := s.GenMsgData()
-			msgData.Data = data
-			subDynamic.Cast(groupId, msgData)
-		}
+func cbForReadData(group interface{}, groupId int64, connId int64, data []byte) error {
+	log.Printf("example.cbForReadData, groupId:%v, connId:%v, data:%v\n", groupId, connId, string(data))
+
+	groupObj, _ := group.(iface.IGroup)
+	if groupObj == nil {
+		return errors.New("invalid group obj")
 	}
+
+	//format msg data
+	msgData := s.GenMsgData()
+	msgData.Data = data
+
+	//cast to all
+	groupObj.Cast(msgData)
 	return nil
 }
 
