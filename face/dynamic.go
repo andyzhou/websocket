@@ -72,6 +72,24 @@ func (f *Dynamic) GetGroup(groupId int64) (iface.IGroup, error) {
 	return v, nil
 }
 
+//create new group
+//the new group should be pre-create
+func (f *Dynamic) CreateGroup(groupId int64) (iface.IGroup, error) {
+	//check
+	if groupId <= 0 {
+		return nil, errors.New("invalid parameter")
+	}
+
+	//create new
+	newGroup := NewGroup(groupId, f.cfg)
+
+	//sync into env with locker
+	f.Lock()
+	defer f.Unlock()
+	f.groupMap[groupId] = newGroup
+	return newGroup, nil
+}
+
 //cast message
 func (f *Dynamic) Cast(groupId int64, msg *gvar.MsgData) error {
 	//check
@@ -103,6 +121,7 @@ func (f *Dynamic) Entry(conn *websocket.Conn) {
 	//check group id para
 	groupId, err := f.getAndVerifyGroupId(conn)
 	if err != nil || groupId <= 0 {
+		log.Printf("group %v, verify group id frailed", groupId)
 		return
 	}
 
@@ -113,16 +132,18 @@ func (f *Dynamic) Entry(conn *websocket.Conn) {
 		newConnId = atomic.AddInt64(&f.connId, 1)
 	}
 	if newConnId <= 0 {
-		log.Printf("group %v, can't gen new connect id\n", f.cfg.Uri)
+		log.Printf("group %v, can't gen new connect id\n", groupId)
 		return
 	}
 
 	//get or create group
 	groupObj, subErr := f.GetGroup(groupId)
-	if subErr != nil || groupObj == nil {
-		groupObj, subErr = f.createGroup(groupId)
+	if subErr != nil {
+		log.Printf("group %v, get group failed, err:%v\n", groupId, subErr.Error())
+		return
 	}
-	if subErr != nil || groupObj == nil {
+	if groupObj == nil {
+		log.Printf("group %v, can't get group object\n", groupId)
 		return
 	}
 
@@ -136,23 +157,6 @@ func (f *Dynamic) Entry(conn *websocket.Conn) {
 ////////////////
 //private func
 ////////////////
-
-//create new group
-func (f *Dynamic) createGroup(groupId int64) (iface.IGroup, error) {
-	//check
-	if groupId <= 0 {
-		return nil, errors.New("invalid parameter")
-	}
-
-	//create new
-	newGroup := NewGroup(groupId, f.cfg)
-
-	//sync into env with locker
-	f.Lock()
-	defer f.Unlock()
-	f.groupMap[groupId] = newGroup
-	return newGroup, nil
-}
 
 //get and verify group id para
 func (f *Dynamic) getAndVerifyGroupId(conn *websocket.Conn) (int64, error) {

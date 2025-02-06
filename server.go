@@ -147,6 +147,9 @@ func (f *Server) RegisterDynamic(cfg *gvar.GroupConf) error {
 	//init new sub dynamic face
 	subDynamic := face.NewDynamic(cfg)
 
+	//create dynamic group
+	subDynamic.CreateGroup(2)
+
 	//format dynamic uri with path para
 	uriWithPathPara := fmt.Sprintf("%v/{%v}", cfg.Uri, define.GroupPathParaName)
 

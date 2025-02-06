@@ -15,6 +15,7 @@ type IDynamic interface {
 	Quit()
 	GetConf() *gvar.GroupConf
 	GetGroup(groupId int64) (IGroup, error)
+	CreateGroup(groupId int64) (IGroup, error)
 	Cast(groupId int64, msg *gvar.MsgData) error
 	Entry(conn *websocket.Conn)
 }
