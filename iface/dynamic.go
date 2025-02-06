@@ -14,6 +14,7 @@ import (
 type IDynamic interface {
 	Quit()
 	GetConf() *gvar.GroupConf
+	RemoveGroup(groupId int64) error
 	GetGroup(groupId int64) (IGroup, error)
 	CreateGroup(groupId int64) (IGroup, error)
 	Cast(groupId int64, msg *gvar.MsgData) error

@@ -55,6 +55,32 @@ func (f *Dynamic) GetConf() *gvar.GroupConf {
 	return f.cfg
 }
 
+//remove group by id
+func (f *Dynamic) RemoveGroup(groupId int64) error {
+	//check
+	if groupId <= 0 {
+		return errors.New("invalid parameter")
+	}
+
+	//get old group
+	oldGroup, _ := f.GetGroup(groupId)
+	if oldGroup == nil {
+		return errors.New("no such group")
+	}
+	oldGroup.Quit()
+
+	//remove with locker
+	f.Lock()
+	defer f.Unlock()
+	delete(f.groupMap, groupId)
+
+	//gc opt
+	if len(f.groupMap) <= 0 {
+		runtime.GC()
+	}
+	return nil
+}
+
 //get group by id
 func (f *Dynamic) GetGroup(groupId int64) (iface.IGroup, error) {
 	//check
