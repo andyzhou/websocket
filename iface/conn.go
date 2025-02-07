@@ -18,8 +18,8 @@ type IConnector interface {
 	SetOwnerId(ownerId int64)
 
 	//read and write
-	Write(data []byte) error
-	Read() ([]byte, error)
+	Write(data interface{}, messageTypes ...int) error
+	Read(messageTypes ...int) (interface{}, error)
 
 	//connect
 	GetConnId() int64

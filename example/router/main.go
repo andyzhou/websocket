@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"github.com/andyzhou/websocket"
+	"github.com/andyzhou/websocket/gvar"
 	"github.com/andyzhou/websocket/iface"
 	"log"
 	"sync"
@@ -46,19 +47,41 @@ func cbForConnected(router interface{}, connId int64) error {
 }
 
 //cb for read data from client sent
-func cbForReadData(router interface{}, connId int64, data []byte) error {
+func cbForReadData(router interface{}, connId int64, messageType int, data interface{}) error {
+	var (
+		msgData *gvar.MsgData
+	)
 	routerObj, _ := router.(iface.IRouter)
 	if routerObj == nil {
 		return errors.New("invalid router")
 	}
-	log.Printf("example.cbForReadData, connId:%v, data:%v\n", connId, string(data))
-	//format msg data
-	msgData := s.GenMsgData()
-	msgData.Data = data
+	log.Printf("example.cbForReadData, connId:%v, messageType:%v, data:%v\n", connId, messageType, data)
+
+	//init msg data
+	msgData = s.GenMsgData()
+
+	//do diff opt by message type
+	switch messageType {
+	case gvar.MessageTypeOfJson:
+		{
+			//json format
+			msgData.Data = data
+			break
+		}
+	case gvar.MessageTypeOfOctet:
+		{
+			//string format
+			byteData, ok := data.([]uint8)
+			if ok && byteData != nil {
+				msgData.Data = string(byteData)
+			}
+			break
+		}
+	}
 
 	//cast to all
-	routerObj.Cast(msgData)
-	return nil
+	err := routerObj.Cast(msgData)
+	return err
 }
 
 func main() {
@@ -73,6 +96,7 @@ func main() {
 	routerCfg := s.GenRouterCfg()
 	routerCfg.Uri = WsUri
 	routerCfg.Buckets = WsBuckets
+	routerCfg.MessageType = gvar.MessageTypeOfOctet
 
 	//setup cb opt
 	routerCfg.CBForConnected = cbForConnected

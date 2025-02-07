@@ -171,21 +171,21 @@ func (f *Group) readLoop() {
 	//sub func for read connect message opt
 	subRead := func(k, v interface{}) bool {
 		var (
-			data []byte
+			data interface{}
 			err error
 		)
 		//detect connector
 		conn, ok := v.(iface.IConnector)
 		if ok && conn != nil {
 			//read data
-			data, err = conn.Read()
+			data, err = conn.Read(f.conf.MessageType)
 			if err != nil {
 				if err == io.EOF {
 					//lost or read a bad connect
 					//remove and force close connect
 					f.CloseConn(conn.GetConnId())
 				}
-				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				if netErr, sok := err.(net.Error); sok && netErr.Timeout() {
 					//read timeout
 					//do nothing
 				}
@@ -193,7 +193,7 @@ func (f *Group) readLoop() {
 				//read data succeed
 				//check and call the read cb of outside
 				if f.conf != nil && f.conf.CBForRead != nil {
-					f.conf.CBForRead(f, f.groupId, conn.GetConnId(), data)
+					f.conf.CBForRead(f, f.groupId, conn.GetConnId(), f.conf.MessageType, data)
 				}
 			}
 		}
@@ -251,7 +251,7 @@ func (f *Group) writeLoop() {
 					continue
 				}
 				//write to target conn
-				conn.Write(data.Data)
+				conn.Write(data.Data, f.conf.MessageType)
 			}
 			return nil
 		}
@@ -260,7 +260,7 @@ func (f *Group) writeLoop() {
 		subConnWriteFunc := func(k, v interface{}) bool {
 			conn, ok := v.(iface.IConnector)
 			if ok && conn != nil {
-				conn.Write(data.Data)
+				conn.Write(data.Data, f.conf.MessageType)
 			}
 			return true
 		}

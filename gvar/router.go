@@ -8,6 +8,12 @@ import "time"
  * global variables define
  */
 
+//message type
+const (
+	MessageTypeOfOctet = iota //BinaryMessage
+	MessageTypeOfJson         //JsonMessage
+)
+
 type (
 	//persistent router conf
 	RouterConf struct {
@@ -16,12 +22,13 @@ type (
 		Buckets      int
 		ReadTimeout  time.Duration
 		WriteTimeout time.Duration
+		MessageType  int
 
 		//cb func for websocket
 		CBForGenConnId func() int64
 		CBForConnected func(router interface{}, connId int64) error
 		CBForClosed    func(router interface{}, connId int64) error
-		CBForRead      func(router interface{}, connId int64, message []byte) error
+		CBForRead      func(router interface{}, connId int64, messageType int, data interface{}) error
 	}
 
 	//dynamic group conf
@@ -30,17 +37,18 @@ type (
 		Uri          string //final format like `/<orgUri>/{groupId}`
 		ReadTimeout  time.Duration
 		WriteTimeout time.Duration
+		MessageType  int
 
 		//cb func for websocket
 		CBForGenConnId   func() int64
 		CBForVerifyGroup func(groupObj interface{}, groupId int64) error
 		CBForConnected   func(groupObj interface{}, groupId int64, connId int64) error
 		CBForClosed      func(groupObj interface{}, groupId int64, connId int64) error
-		CBForRead        func(groupObj interface{}, groupId int64, connId int64, message []byte) error
+		CBForRead        func(groupObj interface{}, groupId int64, connId int64, messageType int, data interface{}) error
 	}
 
 	MsgData struct {
-		Data    []byte
-		ConnIds []int64
+		Data       interface{}
+		ConnIds    []int64
 	}
 )

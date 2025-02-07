@@ -185,7 +185,7 @@ func (f *Bucket) readLoop() {
 	//sub func for read connect message opt
 	subRead := func(k, v interface{}) bool {
 		var (
-			data []byte
+			data interface{}
 			err error
 		)
 		//detect connector
@@ -207,7 +207,7 @@ func (f *Bucket) readLoop() {
 				//read data succeed
 				//check and call the read cb of outside
 				if f.conf != nil && f.conf.CBForRead != nil {
-					f.conf.CBForRead(f.router, conn.GetConnId(), data)
+					f.conf.CBForRead(f.router, conn.GetConnId(), f.conf.MessageType, data)
 				}
 			}
 		}
@@ -269,7 +269,7 @@ func (f *Bucket) writeLoop() {
 				//}
 
 				//write to target conn
-				conn.Write(data.Data)
+				conn.Write(data.Data, f.conf.MessageType)
 			}
 			return nil
 		}
@@ -281,7 +281,7 @@ func (f *Bucket) writeLoop() {
 				//if conn.GetEntrustGroup() > 0 {
 				//	return true
 				//}
-				conn.Write(data.Data)
+				conn.Write(data.Data, f.conf.MessageType)
 			}
 			return true
 		}

@@ -2,6 +2,7 @@ package face
 
 import (
 	"errors"
+	"github.com/andyzhou/websocket/gvar"
 	"github.com/gorilla/mux"
 	"time"
 
@@ -92,7 +93,11 @@ func (f *Connector) GetConn() *websocket.Conn {
 }
 
 //send message with timeout
-func (f *Connector) Write(data []byte) error {
+func (f *Connector) Write(data interface{}, messageTypes ...int) error {
+	var (
+		messageType int
+		err error
+	)
 	//check
 	if data == nil {
 		return errors.New("invalid parameter")
@@ -100,31 +105,67 @@ func (f *Connector) Write(data []byte) error {
 	if f.conn == nil {
 		return errors.New("connect is nil")
 	}
+	if messageTypes != nil && len(messageTypes) > 0 {
+		messageType = messageTypes[0]
+	}
 
 	//set write deadline
 	f.conn.SetWriteDeadline(time.Now().Add(f.writeTimeout))
 
 	//send real data
-	err := websocket.Message.Send(f.conn, data)
+	switch messageType {
+	case gvar.MessageTypeOfJson:
+		{
+			//json format
+			err = websocket.JSON.Send(f.conn, data)
+		}
+	case gvar.MessageTypeOfOctet:
+		fallthrough
+	default:
+		{
+			//general octet format
+			err = websocket.Message.Send(f.conn, data)
+		}
+	}
 	return err
 }
 
 //read message with timeout
-func (f *Connector) Read() ([]byte, error) {
+func (f *Connector) Read(messageTypes ...int) (interface{}, error) {
 	var (
-		data []byte
+		messageType int
+		err error
 	)
 	//check
 	if f.conn == nil {
 		return nil, errors.New("connect is nil")
+	}
+	if messageTypes != nil && len(messageTypes) > 0 {
+		messageType = messageTypes[0]
 	}
 
 	//set read deadline
 	f.conn.SetReadDeadline(time.Now().Add(f.readTimeout))
 
 	//receive data
-	err := websocket.Message.Receive(f.conn, &data)
-	return data, err
+	switch messageType {
+	case gvar.MessageTypeOfJson:
+		{
+			//json format
+			var data interface{}
+			err = websocket.JSON.Receive(f.conn, &data)
+			return data, nil
+		}
+	case gvar.MessageTypeOfOctet:
+		fallthrough
+	default:
+		{
+			//general octet format
+			var data []byte
+			err = websocket.Message.Receive(f.conn, &data)
+			return data, err
+		}
+	}
 }
 
 //inter init

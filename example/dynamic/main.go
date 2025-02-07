@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"github.com/andyzhou/websocket"
+	"github.com/andyzhou/websocket/gvar"
 	"github.com/andyzhou/websocket/iface"
 	"log"
 	"sync"
@@ -12,6 +13,15 @@ import (
  * @author <AndyZhou>
  * @mail <diudiu8848@163.com>
  * example code for server side
+ */
+
+/*
+ * if use json format, client js send data like these:
+ `
+	var messageObj = new Object();
+	messageObj.messge = message;
+  	ws.send(JSON.stringify(messageObj));
+ `
  */
 
 const (
@@ -52,21 +62,44 @@ func cbForVerifyGroup(group interface{}, groupId int64) error {
 }
 
 //cb for read data from client sent
-func cbForReadData(group interface{}, groupId int64, connId int64, data []byte) error {
-	log.Printf("example.cbForReadData, groupId:%v, connId:%v, data:%v\n", groupId, connId, string(data))
-
+func cbForReadData(group interface{}, groupId int64, connId int64, messageType int, data interface{}) error {
+	var (
+		msgData *gvar.MsgData
+	)
+	if data == nil {
+		return errors.New("invalid parameter")
+	}
+	log.Printf("example.cbForReadData, groupId:%v, connId:%v, messageType:%v, data:%v\n",
+		groupId, connId, messageType, data)
 	groupObj, _ := group.(iface.IGroup)
 	if groupObj == nil {
 		return errors.New("invalid group obj")
 	}
 
-	//format msg data
-	msgData := s.GenMsgData()
-	msgData.Data = data
+	//init msg data
+	msgData = s.GenMsgData()
 
+	//do diff opt by message type
+	switch messageType {
+	case gvar.MessageTypeOfJson:
+		{
+			//json format
+			msgData.Data = data
+			break
+		}
+	case gvar.MessageTypeOfOctet:
+		{
+			//string format
+			byteData, ok := data.([]uint8)
+			if ok && byteData != nil {
+				msgData.Data = string(byteData)
+			}
+			break
+		}
+	}
 	//cast to all
-	groupObj.Cast(msgData)
-	return nil
+	err := groupObj.Cast(msgData)
+	return err
 }
 
 func main() {
@@ -80,6 +113,7 @@ func main() {
 	//setup config
 	routerCfg := s.GenGroupCfg()
 	routerCfg.Uri = WsUri
+	routerCfg.MessageType = gvar.MessageTypeOfOctet
 
 	//setup cb opt
 	routerCfg.CBForVerifyGroup = cbForVerifyGroup
