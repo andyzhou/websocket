@@ -126,6 +126,32 @@ func (f *Bucket) CloseConn(connId int64) error {
 	return nil
 }
 
+//get connector by owner id
+func (f *Bucket) GetConnByOwnerId(ownerId int64) (iface.IConnector, error) {
+	var (
+		targetConnector iface.IConnector
+	)
+	//check
+	if ownerId <= 0 {
+		return nil, errors.New("invalid parameter")
+	}
+
+	//loop map to found
+	sf := func(k, v interface{}) bool {
+		connector, ok := v.(iface.IConnector)
+		if ok && connector != nil {
+			if connector.GetOwnerId() == ownerId {
+				targetConnector = connector
+				return false
+			}
+		}
+		return true
+	}
+	f.connMap.Range(sf)
+
+	return targetConnector, nil
+}
+
 //get old connect
 func (f *Bucket) GetConn(connId int64) (iface.IConnector, error) {
 	//check

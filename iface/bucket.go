@@ -17,6 +17,7 @@ type IBucket interface {
 
 	//for connect
 	CloseConn(connId int64) error
+	GetConnByOwnerId(ownerId int64) (IConnector, error)
 	GetConn(connId int64) (IConnector, error)
 	AddConn(connId int64, conn *websocket.Conn) error
 }
