@@ -12,6 +12,8 @@ type IConnector interface {
 	Close()
 	CloseWithMessage(message string) error
 	GetUriParas() map[string]string
+	UpdateActiveTime(ts int64)
+	GetActiveTime() int64
 
 	//owner id
 	GetOwnerId() int64

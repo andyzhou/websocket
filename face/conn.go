@@ -20,6 +20,7 @@ type Connector struct {
 	connId       int64           //origin conn id
 	ownerId 	 int64
 	conn         *websocket.Conn //origin conn reference
+	activeTime   int64
 	readTimeout  time.Duration
 	writeTimeout time.Duration
 }
@@ -44,6 +45,16 @@ func (f *Connector) Close() {
 		f.conn.Close()
 		f.conn = nil
 	}
+}
+
+//get active time
+func (f *Connector) GetActiveTime() int64 {
+	return f.activeTime
+}
+
+//update active time
+func (f *Connector) UpdateActiveTime(ts int64) {
+	f.activeTime = ts
 }
 
 //get owner id

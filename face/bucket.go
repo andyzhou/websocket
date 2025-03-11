@@ -196,6 +196,77 @@ func (f *Bucket) AddConn(connId int64, conn *websocket.Conn) error {
 //private func
 ////////////////
 
+//one sub read connect message opt
+func (f *Bucket) subReadOpt(k, v interface{}) bool {
+	var (
+		data interface{}
+		err error
+	)
+	//detect connector
+	conn, ok := v.(iface.IConnector)
+	if ok && conn != nil {
+		//read data
+		data, err = conn.Read()
+		if err != nil {
+			if err == io.EOF {
+				//lost or read a bad connect
+				//remove and force close connect
+				f.CloseConn(conn.GetConnId())
+			}
+			if netErr, sok := err.(net.Error); sok && netErr.Timeout() {
+				//read timeout
+				//do nothing
+			}
+		}else{
+			//read data succeed
+			//check and call the read cb of outside
+			if f.conf != nil && f.conf.CBForRead != nil {
+				f.conf.CBForRead(f.router, conn.GetConnId(), f.conf.MessageType, data)
+			}
+		}
+	}
+	return true
+}
+
+//sub write message opt
+func (f *Bucket) subWriteOpt(data *gvar.MsgData) error {
+	//check
+	if data == nil || data.Data == nil {
+		return errors.New("invalid parameter")
+	}
+
+	if data.ConnIds != nil && len(data.ConnIds) > 0 {
+		//send to assigned connect ids
+		for _, connId := range data.ConnIds {
+			if connId <= 0 {
+				continue
+			}
+			conn, _ := f.GetConn(connId)
+			if conn == nil {
+				continue
+			}
+
+			//write to target conn
+			conn.Write(data.Data, f.conf.MessageType)
+		}
+		return nil
+	}
+
+	//send to all connects
+	subConnWriteFunc := func(k, v interface{}) bool {
+		conn, ok := v.(iface.IConnector)
+		if ok && conn != nil {
+			//if conn.GetEntrustGroup() > 0 {
+			//	return true
+			//}
+			conn.Write(data.Data, f.conf.MessageType)
+		}
+		return true
+	}
+	f.connMap.Range(subConnWriteFunc)
+	return nil
+}
+
 //read loop
 func (f *Bucket) readLoop() {
 	var (
@@ -208,38 +279,6 @@ func (f *Bucket) readLoop() {
 		}
 	}()
 
-	//sub func for read connect message opt
-	subRead := func(k, v interface{}) bool {
-		var (
-			data interface{}
-			err error
-		)
-		//detect connector
-		conn, ok := v.(iface.IConnector)
-		if ok && conn != nil {
-			//read data
-			data, err = conn.Read()
-			if err != nil {
-				if err == io.EOF {
-					//lost or read a bad connect
-					//remove and force close connect
-					f.CloseConn(conn.GetConnId())
-				}
-				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-					//read timeout
-					//do nothing
-				}
-			}else{
-				//read data succeed
-				//check and call the read cb of outside
-				if f.conf != nil && f.conf.CBForRead != nil {
-					f.conf.CBForRead(f.router, conn.GetConnId(), f.conf.MessageType, data)
-				}
-			}
-		}
-		return true
-	}
-
 	//loop opt
 	for {
 		select {
@@ -251,7 +290,7 @@ func (f *Bucket) readLoop() {
 		default:
 			{
 				//default map loop opt
-				f.connMap.Range(subRead)
+				f.connMap.Range(f.subReadOpt)
 
 				//sleep awhile
 				time.Sleep(10 * time.Millisecond)
@@ -273,48 +312,6 @@ func (f *Bucket) writeLoop() {
 		}
 	}()
 
-	//sub func for write opt
-	subWriteFunc := func(data *gvar.MsgData) error {
-		//check
-		if data == nil || data.Data == nil {
-			return errors.New("invalid parameter")
-		}
-
-		if data.ConnIds != nil && len(data.ConnIds) > 0 {
-			//send to assigned connect ids
-			for _, connId := range data.ConnIds {
-				if connId <= 0 {
-					continue
-				}
-				conn, _ := f.GetConn(connId)
-				if conn == nil {
-					continue
-				}
-				//if conn.GetEntrustGroup() > 0 {
-				//	continue
-				//}
-
-				//write to target conn
-				conn.Write(data.Data, f.conf.MessageType)
-			}
-			return nil
-		}
-
-		//send to all connects
-		subConnWriteFunc := func(k, v interface{}) bool {
-			conn, ok := v.(iface.IConnector)
-			if ok && conn != nil {
-				//if conn.GetEntrustGroup() > 0 {
-				//	return true
-				//}
-				conn.Write(data.Data, f.conf.MessageType)
-			}
-			return true
-		}
-		f.connMap.Range(subConnWriteFunc)
-		return nil
-	}
-
 	//loop opt
 	for {
 		select {
@@ -326,7 +323,7 @@ func (f *Bucket) writeLoop() {
 		case msgData = <- f.writeChan:
 			{
 				//write inter message data
-				subWriteFunc(&msgData)
+				f.subWriteOpt(&msgData)
 			}
 		}
 	}
