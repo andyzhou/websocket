@@ -132,23 +132,20 @@ func (f *Server) GetDynamic(uri string) (iface.IDynamic, error) {
 }
 
 //register new dynamic router
-func (f *Server) RegisterDynamic(cfg *gvar.GroupConf) error {
+func (f *Server) RegisterDynamic(cfg *gvar.GroupConf) (iface.IDynamic, error) {
 	//check
 	if cfg == nil || cfg.Uri == "" {
-		return errors.New("invalid parameter")
+		return nil, errors.New("invalid parameter")
 	}
 
 	//check old
 	oldDynamic, _ := f.GetDynamic(cfg.Uri)
 	if oldDynamic != nil {
-		return errors.New("this uri dynamic had exists")
+		return oldDynamic, errors.New("this uri dynamic had exists")
 	}
 
 	//init new sub dynamic face
 	subDynamic := face.NewDynamic(cfg)
-
-	//create dynamic group
-	subDynamic.CreateGroup(1)
 
 	//format dynamic uri with path para
 	uriWithPathPara := fmt.Sprintf("%v/{%v}", cfg.Uri, define.GroupPathParaName)
@@ -160,7 +157,7 @@ func (f *Server) RegisterDynamic(cfg *gvar.GroupConf) error {
 	f.Lock()
 	defer f.Unlock()
 	f.dynamicMap[cfg.Uri] = subDynamic
-	return nil
+	return subDynamic, nil
 }
 
 //register new persistent router

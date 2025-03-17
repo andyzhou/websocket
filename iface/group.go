@@ -14,6 +14,8 @@ type IGroup interface {
 	//gen opt
 	Quit()
 	Cast(data *gvar.MsgData) error
+	GetTotal() int
+	GetId() int64
 
 	//for connect
 	CloseConn(connId int64) error

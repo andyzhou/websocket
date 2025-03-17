@@ -106,6 +106,12 @@ func (f *Dynamic) CreateGroup(groupId int64) (iface.IGroup, error) {
 		return nil, errors.New("invalid parameter")
 	}
 
+	//get group first
+	oldGroup, _ := f.GetGroup(groupId)
+	if oldGroup != nil {
+		return nil, errors.New("group had created")
+	}
+
 	//create new
 	newGroup := NewGroup(groupId, f.cfg)
 

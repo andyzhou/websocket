@@ -25,7 +25,7 @@ import (
  */
 
 const (
-	WsUri     = "/group"
+	WsGroupUri     = "/group"
 	WsBuckets = 3
 	WsPort    = 8080
 )
@@ -112,7 +112,7 @@ func main() {
 
 	//setup config
 	routerCfg := s.GenGroupCfg()
-	routerCfg.Uri = WsUri
+	routerCfg.Uri = WsGroupUri
 	routerCfg.MessageType = gvar.MessageTypeOfOctet
 
 	//setup cb opt
@@ -122,10 +122,19 @@ func main() {
 	routerCfg.CBForRead = cbForReadData
 
 	//register dynamic router
-	err := s.RegisterDynamic(routerCfg)
+	dynamic, err := s.RegisterDynamic(routerCfg)
 	if err != nil {
 		panic(any(err))
 	}
+
+	//create group
+	group, subErr := dynamic.CreateGroup(1)
+	if subErr != nil {
+		panic(any(subErr))
+	}
+	groupId := group.GetId()
+	connects := group.GetTotal()
+	log.Printf("group:%v, conns:%v\n", groupId, connects)
 
 	//start service
 	wg.Add(1)

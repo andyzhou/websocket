@@ -39,11 +39,11 @@ type Group struct {
 //construct
 func NewGroup(groupId int64, cfg *gvar.GroupConf) *Group {
 	this := &Group{
-		groupId: groupId,
-		conf: cfg,
-		connMap: sync.Map{},
-		writeChan: make(chan gvar.MsgData, define.DefaultGroupWriteChan),
-		readCloseChan: make(chan bool, 1),
+		groupId:        groupId,
+		conf:           cfg,
+		connMap:        sync.Map{},
+		writeChan:      make(chan gvar.MsgData, define.DefaultGroupWriteChan),
+		readCloseChan:  make(chan bool, 1),
 		writeCloseChan: make(chan bool, 1),
 	}
 	this.interInit()
@@ -86,6 +86,16 @@ func (f *Group) Cast(data *gvar.MsgData) error {
 	//send to write chan
 	f.writeChan <- *data
 	return nil
+}
+
+//get group id
+func (f *Group) GetId() int64 {
+	return f.groupId
+}
+
+//get total connects
+func (f *Group) GetTotal() int {
+	return int(f.connects)
 }
 
 //close old connect
