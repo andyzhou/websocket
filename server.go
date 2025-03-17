@@ -147,7 +147,8 @@ func (f *Server) RegisterDynamic(cfg *gvar.GroupConf) (iface.IDynamic, error) {
 	//init new sub dynamic face
 	subDynamic := face.NewDynamic(cfg)
 
-	//format dynamic uri with path para
+	//format dynamic uri with path para info
+	//path para value used as group id
 	uriWithPathPara := fmt.Sprintf("%v/{%v}", cfg.Uri, define.GroupPathParaName)
 
 	//add websocket sub router handle
