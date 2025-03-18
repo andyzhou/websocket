@@ -50,7 +50,14 @@ func cbForConnected(group interface{}, groupId int64, connId int64) error {
 	if groupObj == nil {
 		return errors.New("invalid group obj")
 	}
-	log.Printf("example.cbForConnected, groupId:%v, connId:%v\n", groupId, connId)
+	//get origin connect and path para
+	conn, _ := groupObj.GetConn(connId)
+	pathParas := conn.GetUriParas()
+	nameVal := conn.GetUriQueryPara("name")
+	ageVal := conn.GetUriQueryPara("age")
+
+	log.Printf("example.cbForConnected, groupId:%v, connId:%v, pathParas:%v, nameVal:%v, ageVal:%v\n",
+		groupId, connId, pathParas, nameVal, ageVal)
 	return nil
 }
 

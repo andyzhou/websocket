@@ -66,7 +66,7 @@
         $(document).ready(function() {
             // WebSocket服务器地址，根据实际情况修改
             //const wsUrl = 'ws://localhost:8080/ws';
-            const wsUrl = 'ws://localhost:8080/group/1';
+            const wsUrl = 'ws://localhost:8080/group/1?name=test&age=10';
             const ws = new WebSocket(wsUrl);
             const $messageContainer = $('#message-container');
             const $messageInput = $('#message-input');

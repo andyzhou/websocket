@@ -98,6 +98,13 @@ func (f *Connector) GetUriParas() map[string]string {
 	return mux.Vars(f.conn.Request())
 }
 
+func (f *Connector) GetUriQueryPara(keyName string) string {
+	if f.conn == nil {
+		return ""
+	}
+	return f.conn.Request().URL.Query().Get(keyName)
+}
+
 //get origin connect reference
 func (f *Connector) GetConn() *websocket.Conn {
 	return f.conn
