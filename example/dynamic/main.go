@@ -25,9 +25,8 @@ import (
  */
 
 const (
-	WsGroupUri     = "/group"
-	WsBuckets = 3
-	WsPort    = 8080
+	WsGroupUri = "/group"
+	WsPort     = 8080
 )
 
 //global variable

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Demo</title>
+    <script src="/html/js/jquery.min.js"></script>
+    <style>
+        #message-container {
+            height: 300px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+            overflow-y: auto;
+        }
+        .message {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 5px;
+        }
+        .message-self {
+            background-color: #e3f2fd;
+            text-align: right;
+        }
+        .message-other {
+            background-color: #f5f5f5;
+        }
+        #input-container {
+            display: flex;
+            gap: 10px;
+        }
+        #message-input {
+            flex: 1;
+            padding: 5px;
+        }
+        button {
+            padding: 5px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="message-container"></div>
+    <div id="input-container">
+        <input type="text" id="message-input" placeholder="输入消息...">
+        <button id="send-btn">发送</button>
+    </div>
+
+    <script>
+        function ab2str(buf) {
+          return String.fromCharCode.apply(null, new Uint16Array(buf));
+        }
+
+        //decode json string into obj
+        function decJsonStr(str) {
+          return JSON.parse(str);
+        }
+
+        //encode obj into json string
+        function encJsonObj(obj) {
+          return JSON.stringify(obj);
+        }
+
+        $(document).ready(function() {
+            // WebSocket服务器地址，根据实际情况修改
+            //const wsUrl = 'ws://localhost:8080/ws';
+            const wsUrl = 'ws://localhost:8080/group/1';
+            const ws = new WebSocket(wsUrl);
+            const $messageContainer = $('#message-container');
+            const $messageInput = $('#message-input');
+            const $sendBtn = $('#send-btn');
+
+            // 连接建立时
+            ws.onopen = function() {
+                addMessage('系统', '已连接到服务器', 'system');
+            };
+
+            // 接收消息时
+            ws.onmessage = function(event) {
+                console.log("on.message, event:"+event.data);
+                addMessage('服务器', event.data, 'other');
+            };
+
+            // 错误处理
+            ws.onerror = function(error) {
+                addMessage('系统', '连接发生错误: ' + error.message, 'system');
+            };
+
+            // 连接关闭时
+            ws.onclose = function() {
+                addMessage('系统', '连接已关闭', 'system');
+            };
+
+            // 发送消息
+            function sendMessage() {
+                const message = $messageInput.val().trim();
+                if (message) {
+                    // var messageObj = new Object();
+                    // messageObj.messge = message;
+                    //ws.send(JSON.stringify(messageObj));
+                    ws.send(message);
+                    addMessage('我', message, 'self');
+                    $messageInput.val('');
+                }
+            }
+
+            // 添加消息到容器
+            function addMessage(sender, content, type) {
+                const time = new Date().toLocaleTimeString();
+                const messageClass = type === 'self' ? 'message-self' : 'message-other';
+                const html = `
+                    <div class="message ${messageClass}">
+                        <div><strong>${sender}</strong> [${time}]</div>
+                        <div>${content}</div>
+                    </div>
+                `;
+                $messageContainer.append(html);
+                // 滚动到底部
+                $messageContainer.scrollTop($messageContainer[0].scrollHeight);
+            }
+
+            // 绑定事件
+            $sendBtn.click(sendMessage);
+            $messageInput.keypress(function(e) {
+                if (e.which === 13) { // 回车键
+                    sendMessage();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
