@@ -165,7 +165,7 @@ func (f *Connector) Read(messageTypes ...int) (interface{}, error) {
 			//json format
 			var data interface{}
 			err = websocket.JSON.Receive(f.conn, &data)
-			return data, nil
+			return data, err
 		}
 	case gvar.MessageTypeOfOctet:
 		fallthrough
