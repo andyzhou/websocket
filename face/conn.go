@@ -202,9 +202,9 @@ func (f *Connector) interInit(timeouts ...time.Duration) {
 		}
 	}
 	if f.readTimeout <= 0 {
-		f.readTimeout = time.Second
+		f.readTimeout = time.Second/10
 	}
 	if f.writeTimeout <= 0 {
-		f.writeTimeout = time.Second
+		f.writeTimeout = time.Second/10
 	}
 }

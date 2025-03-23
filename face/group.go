@@ -166,14 +166,17 @@ func (f *Group) GetConn(connId int64) (iface.IConnector, error) {
 }
 
 //add new connect
-func (f *Group) AddConn(connId int64, conn *websocket.Conn) error {
+func (f *Group) AddConn(connId int64, conn *websocket.Conn, timeouts ...time.Duration) error {
 	//check
 	if connId <= 0 || conn == nil {
 		return errors.New("invalid parameter")
 	}
 
 	//init new connector
-	connector := NewConnector(connId, conn)
+	connector := NewConnector(connId, conn, timeouts...)
+
+	//spawn son process to read
+	go f.oneConnReadLoop(connector)
 
 	//sync into bucket map with locker
 	f.connMap.Store(connId, connector)
@@ -190,6 +193,43 @@ func (f *Group) AddConn(connId int64, conn *websocket.Conn) error {
 ////////////////
 //private func
 ////////////////
+
+//one conn read loop
+//fix multi concurrency read issue
+func (f *Group) oneConnReadLoop(conn iface.IConnector) {
+	var (
+		data interface{}
+		err error
+	)
+	//check
+	if conn == nil {
+		return
+	}
+
+	//read loop
+	for {
+		//read data
+		data, err = conn.Read(f.conf.MessageType)
+		if err != nil {
+			if err == io.EOF {
+				//lost or read a bad connect
+				//remove and force close connect
+				f.CloseConn(conn.GetConnId())
+				break
+			}
+			if netErr, sok := err.(net.Error); sok && netErr.Timeout() {
+				//read timeout
+				//do nothing
+			}
+		}else{
+			//read data succeed
+			//check and call the read cb of outside
+			if f.conf != nil && f.conf.CBForRead != nil {
+				f.conf.CBForRead(f, f.groupId, conn.GetConnId(), f.conf.MessageType, data)
+			}
+		}
+	}
+}
 
 //read loop
 func (f *Group) readLoop() {
@@ -334,6 +374,6 @@ func (f *Group) interInit() {
 	atomic.StoreInt32(&f.connects, 0)
 
 	//spawn read and write loop
-	go f.readLoop()
+	//go f.readLoop()
 	go f.writeLoop()
 }
