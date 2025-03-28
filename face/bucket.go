@@ -204,12 +204,20 @@ func (f *Bucket) AddConn(connId int64, conn *websocket.Conn, timeouts ...time.Du
 func (f *Bucket) oneConnReadLoop(conn iface.IConnector) {
 	var (
 		data interface{}
+		m any = nil
 		err error
 	)
 	//check
 	if conn == nil {
 		return
 	}
+
+	//defer opt
+	defer func() {
+		if pErr := recover(); pErr != m {
+			log.Printf("bucket %v oneConnReadLoop panic, err:%v\n", f.bucketId, pErr)
+		}
+	}()
 
 	//read loop
 	for {
@@ -380,6 +388,6 @@ func (f *Bucket) removeConnect(connId int64) {
 //inter init
 func (f *Bucket) interInit() {
 	//spawn read and write loop
-	go f.readLoop()
+	//go f.readLoop()
 	go f.writeLoop()
 }

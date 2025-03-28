@@ -175,7 +175,7 @@ func (f *Group) AddConn(connId int64, conn *websocket.Conn, timeouts ...time.Dur
 	//init new connector
 	connector := NewConnector(connId, conn, timeouts...)
 
-	//spawn son process to read
+	//spawn son process to read and write
 	go f.oneConnReadLoop(connector)
 
 	//sync into bucket map with locker
@@ -199,12 +199,20 @@ func (f *Group) AddConn(connId int64, conn *websocket.Conn, timeouts ...time.Dur
 func (f *Group) oneConnReadLoop(conn iface.IConnector) {
 	var (
 		data interface{}
+		m any = nil
 		err error
 	)
 	//check
 	if conn == nil {
 		return
 	}
+
+	//defer opt
+	defer func() {
+		if pErr := recover(); pErr != m {
+			log.Printf("group %v oneConnReadLoop panic, err:%v\n", f.groupId, pErr)
+		}
+	}()
 
 	//read loop
 	for {
@@ -231,7 +239,7 @@ func (f *Group) oneConnReadLoop(conn iface.IConnector) {
 	}
 }
 
-//read loop
+//read loop, replace by `oneConnReadLoop`
 func (f *Group) readLoop() {
 	var (
 		m any = nil
@@ -373,7 +381,6 @@ func (f *Group) interInit() {
 	//init counter
 	atomic.StoreInt32(&f.connects, 0)
 
-	//spawn read and write loop
-	//go f.readLoop()
+	//spawn main write loop
 	go f.writeLoop()
 }
