@@ -163,6 +163,9 @@ func (f *Connector) Read(messageTypes ...int) (interface{}, error) {
 	}
 
 	//set read deadline
+	if f.conn == nil {
+		return nil, errors.New("connect is nil")
+	}
 	f.conn.SetReadDeadline(time.Now().Add(f.readTimeout))
 
 	//receive data
