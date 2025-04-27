@@ -31,7 +31,6 @@ type Group struct {
 	connMap        sync.Map        //connId -> IConnector
 	connects       int32           //total connects
 	writeChan      chan gvar.MsgData
-	readCloseChan  chan bool
 	writeCloseChan chan bool
 	Util
 }
@@ -43,7 +42,6 @@ func NewGroup(groupId int64, cfg *gvar.GroupConf) *Group {
 		conf:           cfg,
 		connMap:        sync.Map{},
 		writeChan:      make(chan gvar.MsgData, define.DefaultGroupWriteChan),
-		readCloseChan:  make(chan bool, 1),
 		writeCloseChan: make(chan bool, 1),
 	}
 	this.interInit()
@@ -54,7 +52,6 @@ func NewGroup(groupId int64, cfg *gvar.GroupConf) *Group {
 func (f *Group) Quit() {
 	//force close main loop
 	close(f.writeCloseChan)
-	close(f.readCloseChan)
 
 	//just del record
 	rangeOpt := func(k, v interface{}) bool {
@@ -234,70 +231,6 @@ func (f *Group) oneConnReadLoop(conn iface.IConnector) {
 			//check and call the read cb of outside
 			if f.conf != nil && f.conf.CBForRead != nil {
 				f.conf.CBForRead(f, f.groupId, conn.GetConnId(), f.conf.MessageType, data)
-			}
-		}
-	}
-}
-
-//read loop, replace by `oneConnReadLoop`
-func (f *Group) readLoop() {
-	var (
-		m any = nil
-	)
-	//panic catch
-	defer func() {
-		if err := recover(); err != m {
-			log.Printf("group %v read loop panic, err:%v\n", f.groupId, err)
-		}
-	}()
-
-	//sub func for read connect message opt
-	subRead := func(k, v interface{}) bool {
-		var (
-			data interface{}
-			err error
-		)
-		//detect connector
-		conn, ok := v.(iface.IConnector)
-		if ok && conn != nil {
-			//read data
-			data, err = conn.Read(f.conf.MessageType)
-			if err != nil {
-				if err == io.EOF {
-					//lost or read a bad connect
-					//remove and force close connect
-					f.CloseConn(conn.GetConnId())
-				}
-				if netErr, sok := err.(net.Error); sok && netErr.Timeout() {
-					//read timeout
-					//do nothing
-				}
-			}else{
-				//read data succeed
-				//check and call the read cb of outside
-				if f.conf != nil && f.conf.CBForRead != nil {
-					f.conf.CBForRead(f, f.groupId, conn.GetConnId(), f.conf.MessageType, data)
-				}
-			}
-		}
-		return true
-	}
-
-	//loop opt
-	for {
-		select {
-		case <- f.readCloseChan:
-			{
-				//force quit read loop
-				return
-			}
-		default:
-			{
-				//default map loop opt
-				f.connMap.Range(subRead)
-
-				//sleep awhile
-				time.Sleep(10 * time.Millisecond)
 			}
 		}
 	}

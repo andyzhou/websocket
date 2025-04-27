@@ -32,7 +32,6 @@ type Bucket struct {
 	connMap        sync.Map         //connId -> IConnector
 	connects       int64            //total connects
 	writeChan      chan gvar.MsgData
-	readCloseChan  chan bool
 	writeCloseChan chan bool
 	Util
 }
@@ -45,7 +44,6 @@ func NewBucket(router iface.IRouter, bucketId int, cfg *gvar.RouterConf) *Bucket
 		conf: cfg,
 		connMap: sync.Map{},
 		writeChan: make(chan gvar.MsgData, define.DefaultBucketWriteChan),
-		readCloseChan: make(chan bool, 1),
 		writeCloseChan: make(chan bool, 1),
 	}
 	this.interInit()
@@ -56,7 +54,6 @@ func NewBucket(router iface.IRouter, bucketId int, cfg *gvar.RouterConf) *Bucket
 func (f *Bucket) Quit() {
 	//force close main loop
 	close(f.writeCloseChan)
-	close(f.readCloseChan)
 
 	//force close with locker
 	rangeOpt := func(k, v interface{}) bool {
@@ -244,38 +241,6 @@ func (f *Bucket) oneConnReadLoop(conn iface.IConnector) {
 	}
 }
 
-//one sub read connect message opt
-func (f *Bucket) subReadOpt(k, v interface{}) bool {
-	var (
-		data interface{}
-		err error
-	)
-	//detect connector
-	conn, ok := v.(iface.IConnector)
-	if ok && conn != nil {
-		//read data
-		data, err = conn.Read()
-		if err != nil {
-			if err == io.EOF {
-				//lost or read a bad connect
-				//remove and force close connect
-				f.CloseConn(conn.GetConnId())
-			}
-			if netErr, sok := err.(net.Error); sok && netErr.Timeout() {
-				//read timeout
-				//do nothing
-			}
-		}else{
-			//read data succeed
-			//check and call the read cb of outside
-			if f.conf != nil && f.conf.CBForRead != nil {
-				f.conf.CBForRead(f.router, conn.GetConnId(), f.conf.MessageType, data)
-			}
-		}
-	}
-	return true
-}
-
 //sub write message opt
 func (f *Bucket) subWriteOpt(data *gvar.MsgData) error {
 	//check
@@ -304,47 +269,12 @@ func (f *Bucket) subWriteOpt(data *gvar.MsgData) error {
 	subConnWriteFunc := func(k, v interface{}) bool {
 		conn, ok := v.(iface.IConnector)
 		if ok && conn != nil {
-			//if conn.GetEntrustGroup() > 0 {
-			//	return true
-			//}
 			conn.Write(data.Data, f.conf.MessageType)
 		}
 		return true
 	}
 	f.connMap.Range(subConnWriteFunc)
 	return nil
-}
-
-//read loop
-func (f *Bucket) readLoop() {
-	var (
-		m any = nil
-	)
-	//panic catch
-	defer func() {
-		if err := recover(); err != m {
-			log.Printf("bucket %v read loop panic, err:%v\n", f.bucketId, err)
-		}
-	}()
-
-	//loop opt
-	for {
-		select {
-		case <- f.readCloseChan:
-			{
-				//force quit read loop
-				return
-			}
-		default:
-			{
-				//default map loop opt
-				f.connMap.Range(f.subReadOpt)
-
-				//sleep awhile
-				time.Sleep(10 * time.Millisecond)
-			}
-		}
-	}
 }
 
 //write loop
@@ -387,7 +317,5 @@ func (f *Bucket) removeConnect(connId int64) {
 
 //inter init
 func (f *Bucket) interInit() {
-	//spawn read and write loop
-	//go f.readLoop()
 	go f.writeLoop()
 }
