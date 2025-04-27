@@ -2,16 +2,17 @@ package face
 
 import (
 	"errors"
-	"github.com/andyzhou/websocket/define"
-	"github.com/andyzhou/websocket/gvar"
-	"github.com/andyzhou/websocket/iface"
-	"github.com/gorilla/mux"
-	"golang.org/x/net/websocket"
 	"log"
 	"runtime"
 	"strconv"
 	"sync"
 	"sync/atomic"
+
+	"github.com/andyzhou/websocket/define"
+	"github.com/andyzhou/websocket/gvar"
+	"github.com/andyzhou/websocket/iface"
+	"github.com/gorilla/mux"
+	"golang.org/x/net/websocket"
 )
 
 /*

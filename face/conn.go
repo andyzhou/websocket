@@ -2,10 +2,10 @@ package face
 
 import (
 	"errors"
-	"github.com/andyzhou/websocket/gvar"
-	"github.com/gorilla/mux"
 	"time"
 
+	"github.com/andyzhou/websocket/gvar"
+	"github.com/gorilla/mux"
 	"golang.org/x/net/websocket"
 )
 

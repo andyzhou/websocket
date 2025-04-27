@@ -10,7 +10,6 @@ import (
 	"github.com/andyzhou/websocket/define"
 	"github.com/andyzhou/websocket/gvar"
 	"github.com/andyzhou/websocket/iface"
-
 	"golang.org/x/net/websocket"
 )
 

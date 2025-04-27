@@ -2,11 +2,12 @@ package main
 
 import (
 	"errors"
+	"log"
+	"sync"
+
 	"github.com/andyzhou/websocket"
 	"github.com/andyzhou/websocket/gvar"
 	"github.com/andyzhou/websocket/iface"
-	"log"
-	"sync"
 )
 
 /*

@@ -3,15 +3,14 @@ package websocket
 import (
 	"errors"
 	"fmt"
-	"github.com/andyzhou/websocket/define"
 	"net/http"
 	"runtime"
 	"sync"
 
+	"github.com/andyzhou/websocket/define"
 	"github.com/andyzhou/websocket/face"
 	"github.com/andyzhou/websocket/gvar"
 	"github.com/andyzhou/websocket/iface"
-
 	"github.com/gorilla/mux"
 	"golang.org/x/net/websocket"
 )

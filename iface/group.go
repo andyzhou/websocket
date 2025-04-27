@@ -1,9 +1,10 @@
 package iface
 
 import (
+	"time"
+
 	"github.com/andyzhou/websocket/gvar"
 	"golang.org/x/net/websocket"
-	"time"
 )
 
 /*
