@@ -19,8 +19,8 @@ import (
 type Connector struct {
 	connId       int64           //origin conn id
 	ownerId 	 int64
-	conn         *websocket.Conn //origin conn reference
 	activeTime   int64
+	conn         *websocket.Conn //origin conn reference
 	readTimeout  time.Duration
 	writeTimeout time.Duration
 }

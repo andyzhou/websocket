@@ -88,11 +88,15 @@ func (f *Server) Start(port int) error {
 
 //get all routers
 func (f *Server) GetAllRouters() map[string]iface.IRouter {
+	f.Lock()
+	defer f.Unlock()
 	return f.routerMap
 }
 
 //get all dynamics
 func (f *Server) GetAllDynamics() map[string]iface.IDynamic {
+	f.dynamicLocker.Lock()
+	defer f.dynamicLocker.Unlock()
 	return f.dynamicMap
 }
 
