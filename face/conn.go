@@ -127,6 +127,11 @@ func (f *Connector) Write(data interface{}, messageTypes ...int) error {
 		messageType = messageTypes[0]
 	}
 
+	//update active time
+	defer func() {
+		f.UpdateActiveTime(time.Now().Unix())
+	}()
+
 	//set write deadline
 	f.conn.SetWriteDeadline(time.Now().Add(f.writeTimeout))
 
@@ -167,6 +172,11 @@ func (f *Connector) Read(messageTypes ...int) (interface{}, error) {
 		return nil, errors.New("connect is nil")
 	}
 	f.conn.SetReadDeadline(time.Now().Add(f.readTimeout))
+
+	//update active time
+	defer func() {
+		f.UpdateActiveTime(time.Now().Unix())
+	}()
 
 	//receive data
 	switch messageType {
@@ -210,4 +220,7 @@ func (f *Connector) interInit(timeouts ...time.Duration) {
 	if f.writeTimeout <= 0 {
 		f.writeTimeout = time.Second/10
 	}
+
+	//update active time
+	f.UpdateActiveTime(time.Now().Unix())
 }
