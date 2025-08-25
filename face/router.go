@@ -3,8 +3,6 @@ package face
 import (
 	"errors"
 	"log"
-	"runtime"
-	"sync"
 	"sync/atomic"
 
 	"github.com/andyzhou/websocket/define"
@@ -23,9 +21,8 @@ import (
 type Router struct {
 	cfg         *gvar.RouterConf       //router origin conf reference
 	connId      int64                  //inter atomic conn id counter
-	buckets     int                    //total buckets
-	bucketMap   map[int]iface.IBucket  //bucket map
-	sync.RWMutex
+	buckets     int                    //total buckets of config
+	bucketMap   map[int]iface.IBucket  //bucket map container
 }
 
 //construct
@@ -41,15 +38,10 @@ func NewRouter(cfg *gvar.RouterConf) *Router {
 //quit
 func (f *Router) Quit()  {
 	//clear buckets
-	f.Lock()
-	defer f.Unlock()
 	for k, v := range f.bucketMap {
 		v.Quit()
 		delete(f.bucketMap, k)
 	}
-
-	//gc opt
-	runtime.GC()
 }
 
 //get router config
@@ -85,8 +77,6 @@ func (f *Router) Cast(msg *gvar.MsgData) error {
 	}
 
 	//cast to all buckets with locker
-	f.Lock()
-	defer f.Unlock()
 	for _, v := range f.bucketMap {
 		v.Broadcast(msg)
 	}
@@ -139,9 +129,7 @@ func (f *Router) getBucket(idx int) (iface.IBucket, error) {
 		return nil, errors.New("invalid parameter")
 	}
 
-	//get with locker
-	f.Lock()
-	defer f.Unlock()
+	//get bucket by id
 	v, ok := f.bucketMap[idx]
 	if !ok || v == nil {
 		return nil, errors.New("no bucket by idx")
@@ -175,9 +163,7 @@ func (f *Router) interInit() {
 		f.buckets = define.DefaultBuckets
 	}
 
-	//init inter buckets
-	f.Lock()
-	defer f.Unlock()
+	//init inter buckets container
 	for i := 0; i < f.buckets; i++ {
 		bucket := NewBucket(f, i, f.cfg)
 		f.bucketMap[i] = bucket

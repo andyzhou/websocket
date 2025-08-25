@@ -77,7 +77,9 @@ func (f *Dynamic) RemoveGroup(groupId int64) error {
 
 	//gc opt
 	if len(f.groupMap) <= 0 {
-		runtime.GC()
+		//init new group map and release old map
+		newGroupMap := map[int64]iface.IGroup{}
+		f.groupMap = newGroupMap
 	}
 	return nil
 }

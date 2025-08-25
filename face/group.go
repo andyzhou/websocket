@@ -6,9 +6,7 @@ import (
 	"io"
 	"log"
 	"net"
-	"runtime"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/andyzhou/websocket/define"
@@ -29,10 +27,10 @@ import (
 type Group struct {
 	groupId        int64
 	conf           *gvar.GroupConf //group config reference
-	connMap        sync.Map        //connId -> IConnector
-	connects       int32           //total connects
+	connMap        map[int64]iface.IConnector //connId -> IConnector
 	writeChan      chan gvar.MsgData
 	writeCloseChan chan bool
+	sync.RWMutex
 	Util
 }
 
@@ -41,7 +39,7 @@ func NewGroup(groupId int64, cfg *gvar.GroupConf) *Group {
 	this := &Group{
 		groupId:        groupId,
 		conf:           cfg,
-		connMap:        sync.Map{},
+		connMap:        map[int64]iface.IConnector{},
 		writeChan:      make(chan gvar.MsgData, define.DefaultGroupWriteChan),
 		writeCloseChan: make(chan bool, 1),
 	}
@@ -55,14 +53,14 @@ func (f *Group) Quit() {
 	close(f.writeCloseChan)
 
 	//just del record
-	rangeOpt := func(k, v interface{}) bool {
-		f.connMap.Delete(k)
-		return true
+	f.Lock()
+	defer f.Unlock()
+	for k, v := range f.connMap {
+		if v != nil {
+			v.Close()
+		}
+		delete(f.connMap, k)
 	}
-	f.connMap.Range(rangeOpt)
-
-	//gc opt
-	runtime.GC()
 }
 
 //broadcast to connections by condition
@@ -93,7 +91,9 @@ func (f *Group) GetId() int64 {
 
 //get total connects
 func (f *Group) GetTotal() int {
-	return int(f.connects)
+	f.Lock()
+	defer f.Unlock()
+	return len(f.connMap)
 }
 
 //close old connect
@@ -104,16 +104,20 @@ func (f *Group) CloseConn(connId int64) error {
 	}
 
 	//remove conn from map
-	f.connMap.Delete(connId)
+	f.Lock()
+	defer func() {
+		f.Unlock()
 
-	//check and call the closed cb of outside
-	if f.conf != nil && f.conf.CBForClosed != nil {
-		f.conf.CBForClosed(f, f.groupId, connId)
-	}
-	atomic.AddInt32(&f.connects, -1)
-	if f.connects <= 0 {
-		atomic.StoreInt32(&f.connects, 0)
-		runtime.GC()
+		//check and call the closed cb of outside
+		if f.conf != nil && f.conf.CBForClosed != nil {
+			f.conf.CBForClosed(f, f.groupId, connId)
+		}
+	}()
+	delete(f.connMap, connId)
+	if len(f.connMap) <= 0 {
+		//release old conn map
+		newConnMap := map[int64]iface.IConnector{}
+		f.connMap = newConnMap
 	}
 	return nil
 }
@@ -129,18 +133,17 @@ func (f *Group) GetConnByOwnerId(ownerId int64) (iface.IConnector, error) {
 	}
 
 	//loop map to found
-	sf := func(k, v interface{}) bool {
+	f.Lock()
+	defer f.Unlock()
+	for _, v := range f.connMap {
 		connector, ok := v.(iface.IConnector)
 		if ok && connector != nil {
 			if connector.GetOwnerId() == ownerId {
 				targetConnector = connector
-				return false
+				break
 			}
 		}
-		return true
 	}
-	f.connMap.Range(sf)
-
 	return targetConnector, nil
 }
 
@@ -150,17 +153,15 @@ func (f *Group) GetConn(connId int64) (iface.IConnector, error) {
 	if connId <= 0 {
 		return nil, errors.New("invalid parameter")
 	}
-	v, ok := f.connMap.Load(connId)
+
+	//get by connect id
+	f.Lock()
+	defer f.Unlock()
+	v, ok := f.connMap[connId]
 	if !ok || v == nil {
 		return nil, errors.New("no such connector")
 	}
-
-	//detect value
-	connector, sok := v.(iface.IConnector)
-	if !sok || connector == nil {
-		return nil, errors.New("invalid data format")
-	}
-	return connector, nil
+	return v, nil
 }
 
 //add new connect
@@ -177,14 +178,15 @@ func (f *Group) AddConn(connId int64, conn *websocket.Conn, timeouts ...time.Dur
 	go f.oneConnReadLoop(connector)
 
 	//sync into bucket map with locker
-	f.connMap.Store(connId, connector)
-
-	//check and call the connected cb of outside
-	if f.conf != nil && f.conf.CBForConnected != nil {
-		f.conf.CBForConnected(f, f.groupId, connId)
-	}
-	atomic.AddInt32(&f.connects, 1)
-
+	f.Lock()
+	defer func() {
+		f.Unlock()
+		//check and call the connected cb of outside
+		if f.conf != nil && f.conf.CBForConnected != nil {
+			f.conf.CBForConnected(f, f.groupId, connId)
+		}
+	}()
+	f.connMap[connId] = connector
 	return nil
 }
 
@@ -257,31 +259,34 @@ func (f *Group) writeLoop() {
 			return errors.New("invalid parameter")
 		}
 
+		f.Lock()
+		defer f.Unlock()
 		if data.ConnIds != nil && len(data.ConnIds) > 0 {
 			//send to assigned connect ids
 			for _, connId := range data.ConnIds {
 				if connId <= 0 {
 					continue
 				}
-				conn, _ := f.GetConn(connId)
-				if conn == nil {
-					continue
+				v, ok := f.connMap[connId]
+				if ok && v != nil {
+					connector, sok := v.(iface.IConnector)
+					if sok && connector != nil {
+						//write to target conn
+						connector.Write(data.Data, f.conf.MessageType)
+					}
 				}
-				//write to target conn
-				conn.Write(data.Data, f.conf.MessageType)
 			}
 			return nil
 		}
 
 		//send to all connects
-		subConnWriteFunc := func(k, v interface{}) bool {
-			conn, ok := v.(iface.IConnector)
-			if ok && conn != nil {
-				conn.Write(data.Data, f.conf.MessageType)
+		for _, v := range f.connMap {
+			connector, sok := v.(iface.IConnector)
+			if sok && connector != nil {
+				//write to target conn
+				connector.Write(data.Data, f.conf.MessageType)
 			}
-			return true
 		}
-		f.connMap.Range(subConnWriteFunc)
 		return nil
 	}
 
@@ -307,14 +312,17 @@ func (f *Group) removeConnect(connId int64) {
 	if connId <= 0 {
 		return
 	}
-	f.connMap.Delete(connId)
+	f.Lock()
+	defer f.Unlock()
+	delete(f.connMap, connId)
+	if len(f.connMap) <= 0 {
+		newConnMap := map[int64]iface.IConnector{}
+		f.connMap = newConnMap
+	}
 }
 
 //inter init
 func (f *Group) interInit() {
-	//init counter
-	atomic.StoreInt32(&f.connects, 0)
-
 	//spawn main write loop
 	go f.writeLoop()
 }

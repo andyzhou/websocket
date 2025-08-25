@@ -6,7 +6,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -27,12 +26,13 @@ import (
 //face info
 type Bucket struct {
 	bucketId       int
-	router         iface.IRouter    //reference
-	conf           *gvar.RouterConf //reference of parent router
-	connMap        sync.Map         //connId -> IConnector
-	connects       int64            //total connects
+	router         iface.IRouter              //reference
+	conf           *gvar.RouterConf           //reference of parent router
+	connMap        map[int64]iface.IConnector //connId -> IConnector
 	writeChan      chan gvar.MsgData
 	writeCloseChan chan bool
+	opts           int64
+	sync.RWMutex
 	Util
 }
 
@@ -42,11 +42,12 @@ func NewBucket(router iface.IRouter, bucketId int, cfg *gvar.RouterConf) *Bucket
 		router: router,
 		bucketId: bucketId,
 		conf: cfg,
-		connMap: sync.Map{},
+		connMap: map[int64]iface.IConnector{},
 		writeChan: make(chan gvar.MsgData, define.DefaultBucketWriteChan),
 		writeCloseChan: make(chan bool, 1),
 	}
 	this.interInit()
+	go this.periodicCheck()
 	return this
 }
 
@@ -56,18 +57,19 @@ func (f *Bucket) Quit() {
 	close(f.writeCloseChan)
 
 	//force close with locker
-	rangeOpt := func(k, v interface{}) bool {
-		conn, ok := v.(iface.IConnector)
-		if ok && conn != nil {
-			conn.Close()
+	f.Lock()
+	defer f.Unlock()
+	for k, v := range f.connMap {
+		if v != nil {
+			v.Close()
 		}
-		f.connMap.Delete(k)
-		return true
+		delete(f.connMap, k)
 	}
-	f.connMap.Range(rangeOpt)
 
-	//gc opt
-	runtime.GC()
+	//release old map
+	atomic.StoreInt64(&f.opts, 0)
+	newConnMap := map[int64]iface.IConnector{}
+	f.connMap = newConnMap
 }
 
 //broadcast to connections by condition
@@ -108,17 +110,23 @@ func (f *Bucket) CloseConn(connId int64) error {
 	connector.Close()
 
 	//remove conn from map
-	f.connMap.Delete(connId)
-	atomic.AddInt64(&f.connects, -1)
-	if f.connects <= 0 {
-		atomic.StoreInt64(&f.connects, 0)
-		//gc opt
-		runtime.GC()
-	}
+	f.Lock()
+	defer f.Unlock()
+	delete(f.connMap, connId)
 
 	//check and call the closed cb of outside
 	if f.conf != nil && f.conf.CBForClosed != nil {
 		f.conf.CBForClosed(f.router, connId)
+	}
+	if f.opts > 0 {
+		atomic.AddInt64(&f.opts, 1)
+	}
+
+	//release old map
+	if len(f.connMap) <= 0 {
+		newConnMap := map[int64]iface.IConnector{}
+		f.connMap = newConnMap
+		atomic.StoreInt64(&f.opts, 0)
 	}
 	return nil
 }
@@ -134,18 +142,14 @@ func (f *Bucket) GetConnByOwnerId(ownerId int64) (iface.IConnector, error) {
 	}
 
 	//loop map to found
-	sf := func(k, v interface{}) bool {
-		connector, ok := v.(iface.IConnector)
-		if ok && connector != nil {
-			if connector.GetOwnerId() == ownerId {
-				targetConnector = connector
-				return false
-			}
+	f.Lock()
+	defer f.Unlock()
+	for _, v := range f.connMap {
+		if v != nil && v.GetOwnerId() == ownerId {
+			targetConnector = v
+			break
 		}
-		return true
 	}
-	f.connMap.Range(sf)
-
 	return targetConnector, nil
 }
 
@@ -155,17 +159,15 @@ func (f *Bucket) GetConn(connId int64) (iface.IConnector, error) {
 	if connId <= 0 {
 		return nil, errors.New("invalid parameter")
 	}
-	v, ok := f.connMap.Load(connId)
-	if !ok || v == nil {
+
+	//get connect by id
+	f.Lock()
+	defer f.Unlock()
+	conn, ok := f.connMap[connId]
+	if !ok || conn == nil {
 		return nil, errors.New("no such connector")
 	}
-
-	//detect value
-	connector, sok := v.(iface.IConnector)
-	if !sok || connector == nil {
-		return nil, errors.New("invalid data format")
-	}
-	return connector, nil
+	return conn, nil
 }
 
 //add new connect
@@ -182,8 +184,10 @@ func (f *Bucket) AddConn(connId int64, conn *websocket.Conn, timeouts ...time.Du
 	go f.oneConnReadLoop(connector)
 
 	//sync into bucket map with locker
-	f.connMap.Store(connId, connector)
-	atomic.AddInt64(&f.connects, 1)
+	f.Lock()
+	defer f.Unlock()
+	f.connMap[connId] = connector
+	atomic.AddInt64(&f.opts, 1)
 
 	//check and call the connected cb of outside
 	if f.conf != nil && f.conf.CBForConnected != nil {
@@ -248,14 +252,16 @@ func (f *Bucket) subWriteOpt(data *gvar.MsgData) error {
 		return errors.New("invalid parameter")
 	}
 
+	f.Lock()
+	defer f.Unlock()
 	if data.ConnIds != nil && len(data.ConnIds) > 0 {
 		//send to assigned connect ids
 		for _, connId := range data.ConnIds {
 			if connId <= 0 {
 				continue
 			}
-			conn, _ := f.GetConn(connId)
-			if conn == nil {
+			conn, ok := f.connMap[connId]
+			if !ok || conn == nil {
 				continue
 			}
 
@@ -266,14 +272,10 @@ func (f *Bucket) subWriteOpt(data *gvar.MsgData) error {
 	}
 
 	//send to all connects
-	subConnWriteFunc := func(k, v interface{}) bool {
-		conn, ok := v.(iface.IConnector)
-		if ok && conn != nil {
-			conn.Write(data.Data, f.conf.MessageType)
-		}
-		return true
+	for _, conn := range f.connMap {
+		//write to target conn
+		conn.Write(data.Data, f.conf.MessageType)
 	}
-	f.connMap.Range(subConnWriteFunc)
 	return nil
 }
 
@@ -312,7 +314,39 @@ func (f *Bucket) removeConnect(connId int64) {
 	if connId <= 0 {
 		return
 	}
-	f.connMap.Delete(connId)
+	f.Lock()
+	defer f.Unlock()
+	delete(f.connMap, connId)
+	if len(f.connMap) <= 0 {
+		newConnMap := map[int64]iface.IConnector{}
+		f.connMap = newConnMap
+	}
+}
+
+//rebuild
+func (f *Bucket) rebuild() {
+	f.Lock()
+	defer f.Unlock()
+	newConnMap := map[int64]iface.IConnector{}
+	for k, v := range f.connMap {
+		newConnMap[k] = v
+	}
+	f.connMap = newConnMap
+	atomic.StoreInt64(&f.opts, 0)
+}
+
+//dynamic connect map check
+func (f *Bucket) periodicCheck() {
+	//init ticker
+	ticker := time.NewTicker(define.BucketRebuildSeconds * time.Second)
+	defer ticker.Stop()
+
+	//loop ticker
+	for range ticker.C {
+		if f.opts > 0 {
+			f.rebuild()
+		}
+	}
 }
 
 //inter init
