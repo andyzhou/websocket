@@ -2,7 +2,9 @@ package face
 
 import (
 	"errors"
+	"fmt"
 	"log"
+	"math/rand"
 	"runtime"
 	"strconv"
 	"sync"
@@ -24,9 +26,9 @@ import (
 
 //face info
 type Dynamic struct {
-	cfg      *gvar.GroupConf        //router origin conf reference
-	connId   int64                  //inter atomic conn id counter
-	groupMap map[int64]iface.IGroup //dynamic group map
+	cfg          *gvar.GroupConf        //router origin conf reference
+	connId       int64                  //inter atomic conn id counter
+	groupMap     map[int64]iface.IGroup //dynamic group map
 	sync.RWMutex
 }
 
@@ -44,11 +46,11 @@ func NewDynamic(cfg *gvar.GroupConf) *Dynamic {
 func (f *Dynamic) Quit() {
 	f.Lock()
 	defer f.Unlock()
-	for k, v := range f.groupMap {
+	for _, v := range f.groupMap {
 		v.Quit()
-		delete(f.groupMap, k)
 	}
-	runtime.GC()
+	//release old group map
+	f.groupMap = nil
 }
 
 //get conf
@@ -75,11 +77,17 @@ func (f *Dynamic) RemoveGroup(groupId int64) error {
 	defer f.Unlock()
 	delete(f.groupMap, groupId)
 
+	//hit gc rate
+	gcRate := rand.Intn(define.FullPercent)
+	needRebuildNewMap := false
+	if gcRate > 0 && gcRate <= define.DynamicGroupGcRate {
+		needRebuildNewMap = true
+	}
+
 	//gc opt
-	if len(f.groupMap) <= 0 {
-		//init new group map and release old map
-		newGroupMap := map[int64]iface.IGroup{}
-		f.groupMap = newGroupMap
+	if needRebuildNewMap || len(f.groupMap) <= 0 {
+		//rebuild
+		f.rebuild()
 	}
 	return nil
 }
@@ -89,6 +97,9 @@ func (f *Dynamic) GetGroup(groupId int64) (iface.IGroup, error) {
 	//check
 	if groupId <= 0 {
 		return nil, errors.New("invalid parameter")
+	}
+	if f.groupMap == nil {
+		return nil, fmt.Errorf("group %v map is nil", groupId)
 	}
 
 	//get with locker
@@ -192,6 +203,19 @@ func (f *Dynamic) Entry(conn *websocket.Conn) {
 ////////////////
 //private func
 ////////////////
+
+//rebuild
+func (f *Dynamic) rebuild() {
+	//init new group map and release old map
+	newGroupMap := map[int64]iface.IGroup{}
+	for k, v := range f.groupMap {
+		newGroupMap[k] = v
+	}
+	f.groupMap = newGroupMap
+
+	//force gc
+	runtime.GC()
+}
 
 //get and verify group id para
 func (f *Dynamic) getAndVerifyGroupId(conn *websocket.Conn) (int64, error) {

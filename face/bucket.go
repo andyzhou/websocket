@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -53,18 +55,20 @@ func NewBucket(router iface.IRouter, bucketId int, cfg *gvar.RouterConf) *Bucket
 
 //quit
 func (f *Bucket) Quit() {
-	//force close main loop
-	close(f.writeCloseChan)
+	if f.writeCloseChan != nil {
+		//force close main loop
+		close(f.writeCloseChan)
+	}
 
 	//force close with locker
 	f.Lock()
 	defer f.Unlock()
-	for k, v := range f.connMap {
+	for _, v := range f.connMap {
 		if v != nil {
 			v.Close()
 		}
-		delete(f.connMap, k)
 	}
+	f.connMap = nil
 
 	//release old map
 	atomic.StoreInt64(&f.opts, 0)
@@ -122,11 +126,16 @@ func (f *Bucket) CloseConn(connId int64) error {
 		atomic.AddInt64(&f.opts, 1)
 	}
 
+	//hit gc rate
+	gcRate := rand.Intn(define.FullPercent)
+	needCopyNewMap := false
+	if gcRate > 0 && gcRate <= define.DynamicGroupGcRate {
+		needCopyNewMap = true
+	}
+
 	//release old map
-	if len(f.connMap) <= 0 {
-		newConnMap := map[int64]iface.IConnector{}
-		f.connMap = newConnMap
-		atomic.StoreInt64(&f.opts, 0)
+	if needCopyNewMap || len(f.connMap) <= 0 {
+		f.rebuild()
 	}
 	return nil
 }
@@ -290,6 +299,12 @@ func (f *Bucket) writeLoop() {
 		if pErr := recover(); pErr != m {
 			log.Printf("bucket %v wriet loop panic, err:%v\n", f.bucketId, pErr)
 		}
+		if f.writeChan != nil {
+			f.writeChan = nil
+		}
+		if f.writeCloseChan != nil {
+			f.writeCloseChan = nil
+		}
 	}()
 
 	//loop opt
@@ -333,6 +348,9 @@ func (f *Bucket) rebuild() {
 	}
 	f.connMap = newConnMap
 	atomic.StoreInt64(&f.opts, 0)
+
+	//force gc opt
+	runtime.GC()
 }
 
 //dynamic connect map check

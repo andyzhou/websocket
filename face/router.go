@@ -40,8 +40,9 @@ func (f *Router) Quit()  {
 	//clear buckets
 	for k, v := range f.bucketMap {
 		v.Quit()
-		delete(f.bucketMap, k)
+		f.bucketMap[k] = nil
 	}
+	f.bucketMap = nil
 }
 
 //get router config

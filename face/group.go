@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net"
 	"sync"
 	"time"
@@ -55,12 +56,14 @@ func (f *Group) Quit() {
 	//just del record
 	f.Lock()
 	defer f.Unlock()
-	for k, v := range f.connMap {
+	for _, v := range f.connMap {
 		if v != nil {
 			v.Close()
 		}
-		delete(f.connMap, k)
 	}
+
+	//release old map
+	f.connMap = nil
 }
 
 //broadcast to connections by condition
@@ -103,6 +106,13 @@ func (f *Group) CloseConn(connId int64) error {
 		return errors.New("invalid parameter")
 	}
 
+	//hit gc rate
+	gcRate := rand.Intn(define.FullPercent)
+	needRebuildNewMap := false
+	if gcRate > 0 && gcRate <= define.DynamicGroupGcRate {
+		needRebuildNewMap = true
+	}
+
 	//remove conn from map
 	f.Lock()
 	defer func() {
@@ -114,10 +124,9 @@ func (f *Group) CloseConn(connId int64) error {
 		}
 	}()
 	delete(f.connMap, connId)
-	if len(f.connMap) <= 0 {
-		//release old conn map
-		newConnMap := map[int64]iface.IConnector{}
-		f.connMap = newConnMap
+
+	if needRebuildNewMap || len(f.connMap) <= 0 {
+		f.rebuild()
 	}
 	return nil
 }
@@ -194,6 +203,16 @@ func (f *Group) AddConn(connId int64, conn *websocket.Conn, timeouts ...time.Dur
 //private func
 ////////////////
 
+//rebuild inter map
+func (f *Group) rebuild() {
+	//release old conn map
+	newConnMap := map[int64]iface.IConnector{}
+	for k, v := range f.connMap {
+		newConnMap[k] = v
+	}
+	f.connMap = newConnMap
+}
+
 //one conn read loop
 //fix multi concurrency read issue
 func (f *Group) oneConnReadLoop(conn iface.IConnector) {
@@ -249,6 +268,9 @@ func (f *Group) writeLoop() {
 	defer func() {
 		if pErr := recover(); pErr != m {
 			log.Printf("group %v wriet loop panic, err:%v\n", f.groupId, pErr)
+		}
+		if f.writeChan != nil {
+			f.writeChan = nil
 		}
 	}()
 
