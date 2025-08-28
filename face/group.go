@@ -113,6 +113,12 @@ func (f *Group) CloseConn(connId int64) error {
 		needRebuildNewMap = true
 	}
 
+	//get conn obj
+	connector, _ := f.GetConn(connId)
+	if connector != nil {
+		connector.Close()
+	}
+
 	//remove conn from map
 	f.Lock()
 	delete(f.connMap, connId)

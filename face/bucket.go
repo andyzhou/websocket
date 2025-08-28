@@ -105,13 +105,11 @@ func (f *Bucket) CloseConn(connId int64) error {
 	}
 
 	//get conn by id
-	connector, err := f.GetConn(connId)
-	if err != nil || connector == nil {
-		return err
+	connector, _ := f.GetConn(connId)
+	if connector != nil {
+		//force close connect
+		connector.Close()
 	}
-
-	//force close connect
-	connector.Close()
 
 	//remove conn from map
 	f.Lock()
