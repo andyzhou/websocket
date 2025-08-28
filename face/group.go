@@ -117,7 +117,6 @@ func (f *Group) CloseConn(connId int64) error {
 	f.Lock()
 	defer func() {
 		f.Unlock()
-
 		//check and call the closed cb of outside
 		if f.conf != nil && f.conf.CBForClosed != nil {
 			f.conf.CBForClosed(f, f.groupId, connId)
