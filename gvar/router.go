@@ -48,7 +48,8 @@ type (
 	}
 
 	MsgData struct {
-		Data       interface{}
-		ConnIds    []int64
+		Data         interface{}
+		ConnIds      []int64
+		WriteInQueue bool //if true, data should be []byte type
 	}
 )

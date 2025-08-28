@@ -265,6 +265,9 @@ func (f *Bucket) subWriteOpt(data *gvar.MsgData) error {
 		return errors.New("invalid parameter")
 	}
 
+	//check byte data
+	byteData, _ := data.Data.([]byte)
+
 	f.Lock()
 	defer f.Unlock()
 	if data.ConnIds != nil && len(data.ConnIds) > 0 {
@@ -279,7 +282,11 @@ func (f *Bucket) subWriteOpt(data *gvar.MsgData) error {
 			}
 
 			//write to target conn
-			conn.Write(data.Data, f.conf.MessageType)
+			if data.WriteInQueue {
+				conn.QueueWrite(byteData)
+			}else{
+				conn.Write(data.Data, f.conf.MessageType)
+			}
 		}
 		return nil
 	}
@@ -287,7 +294,11 @@ func (f *Bucket) subWriteOpt(data *gvar.MsgData) error {
 	//send to all connects
 	for _, conn := range f.connMap {
 		//write to target conn
-		conn.Write(data.Data, f.conf.MessageType)
+		if data.WriteInQueue {
+			conn.QueueWrite(byteData)
+		}else{
+			conn.Write(data.Data, f.conf.MessageType)
+		}
 	}
 	return nil
 }

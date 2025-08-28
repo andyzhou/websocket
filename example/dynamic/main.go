@@ -99,12 +99,13 @@ func cbForReadData(group interface{}, groupId int64, connId int64, messageType i
 			//string format
 			byteData, ok := data.([]uint8)
 			if ok && byteData != nil {
-				msgData.Data = string(byteData)
+				msgData.Data = []byte(string(byteData))
 			}
 			break
 		}
 	}
 	//cast to all
+	msgData.WriteInQueue = true
 	err := groupObj.Cast(msgData)
 	return err
 }

@@ -281,6 +281,9 @@ func (f *Group) writeLoop() {
 			return errors.New("invalid parameter")
 		}
 
+		//check byte data
+		byteData, _ := data.Data.([]byte)
+
 		f.Lock()
 		defer f.Unlock()
 		if data.ConnIds != nil && len(data.ConnIds) > 0 {
@@ -294,7 +297,11 @@ func (f *Group) writeLoop() {
 					connector, sok := v.(iface.IConnector)
 					if sok && connector != nil {
 						//write to target conn
-						connector.Write(data.Data, f.conf.MessageType)
+						if data.WriteInQueue {
+							connector.QueueWrite(byteData)
+						}else{
+							connector.Write(data.Data, f.conf.MessageType)
+						}
 					}
 				}
 			}
@@ -306,7 +313,11 @@ func (f *Group) writeLoop() {
 			connector, sok := v.(iface.IConnector)
 			if sok && connector != nil {
 				//write to target conn
-				connector.Write(data.Data, f.conf.MessageType)
+				if data.WriteInQueue {
+					connector.QueueWrite(byteData)
+				}else{
+					connector.Write(data.Data, f.conf.MessageType)
+				}
 			}
 		}
 		return nil

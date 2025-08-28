@@ -21,6 +21,7 @@ type IConnector interface {
 	SetOwnerId(ownerId int64)
 
 	//read and write
+	QueueWrite(data []byte) error
 	Write(data interface{}, messageTypes ...int) error
 	Read(messageTypes ...int) (interface{}, error)
 

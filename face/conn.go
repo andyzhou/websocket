@@ -2,6 +2,8 @@ package face
 
 import (
 	"errors"
+	"fmt"
+	"github.com/andyzhou/websocket/define"
 	"time"
 
 	"github.com/andyzhou/websocket/gvar"
@@ -17,12 +19,15 @@ import (
 
 //face info
 type Connector struct {
-	connId       int64           //origin conn id
-	ownerId 	 int64
+	connId       int64 //origin conn id
+	ownerId      int64
 	activeTime   int64
 	conn         *websocket.Conn //origin conn reference
+	writeChan    chan []byte     //write byte chan
+	closeChan    chan bool
 	readTimeout  time.Duration
 	writeTimeout time.Duration
+	Util
 }
 
 //construct
@@ -34,6 +39,8 @@ func NewConnector(
 	this := &Connector{
 		connId: connId,
 		conn: conn,
+		writeChan: make(chan []byte, define.ConnWriteChanSize),
+		closeChan: make(chan bool, 1),
 	}
 	this.interInit(timeouts...)
 	return this
@@ -42,6 +49,7 @@ func NewConnector(
 //close
 func (f *Connector) Close() {
 	if f.conn != nil {
+		close(f.closeChan)
 		f.conn.Close()
 		f.conn = nil
 	}
@@ -108,6 +116,53 @@ func (f *Connector) GetUriQueryPara(keyName string) string {
 //get origin connect reference
 func (f *Connector) GetConn() *websocket.Conn {
 	return f.conn
+}
+
+//pop queue to write
+func (f *Connector) queuePopProcess() {
+	var (
+		data []byte
+		isOk bool
+	)
+	//defer opt
+	defer func() {
+		close(f.writeChan)
+	}()
+
+	//loop
+	for {
+		select {
+		case data, isOk = <- f.writeChan:
+			{
+				if isOk && data != nil {
+					f.conn.Write(data)
+				}
+			}
+		case <- f.closeChan:
+			{
+				return
+			}
+		}
+	}
+}
+
+//push to write queue
+func (f *Connector) QueueWrite(data []byte) error {
+	//check
+	if data == nil {
+		return errors.New("invalid parameter")
+	}
+	isClosed, err := f.IsChanClosed(f.writeChan)
+	if err != nil {
+		return err
+	}
+	if isClosed {
+		return fmt.Errorf("connect %v write chan is closed", f.connId)
+	}
+
+	//write to chan
+	f.writeChan <- data
+	return nil
 }
 
 //send message with timeout
@@ -223,4 +278,7 @@ func (f *Connector) interInit(timeouts ...time.Duration) {
 
 	//update active time
 	f.UpdateActiveTime(time.Now().Unix())
+
+	//run queue pop process
+	go f.queuePopProcess()
 }
