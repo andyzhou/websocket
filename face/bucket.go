@@ -115,16 +115,17 @@ func (f *Bucket) CloseConn(connId int64) error {
 
 	//remove conn from map
 	f.Lock()
-	defer func() {
-		f.Unlock()
-		//check and call the closed cb of outside
-		if f.conf != nil && f.conf.CBForClosed != nil {
-			f.conf.CBForClosed(f.router, connId)
-		}
-	}()
 	delete(f.connMap, connId)
+	f.Unlock()
+
+	//atomic opt
 	if f.opts > 0 {
 		atomic.AddInt64(&f.opts, 1)
+	}
+
+	//check and call the closed cb of outside
+	if f.conf != nil && f.conf.CBForClosed != nil {
+		f.conf.CBForClosed(f.router, connId)
 	}
 
 	//hit gc rate
@@ -136,7 +137,7 @@ func (f *Bucket) CloseConn(connId int64) error {
 
 	//release old map
 	if needCopyNewMap || len(f.connMap) <= 0 {
-		f.rebuild(true)
+		f.rebuild()
 	}
 	return nil
 }
@@ -195,8 +196,10 @@ func (f *Bucket) AddConn(connId int64, conn *websocket.Conn, timeouts ...time.Du
 
 	//sync into bucket map with locker
 	f.Lock()
-	defer f.Unlock()
 	f.connMap[connId] = connector
+	f.Unlock()
+
+	//atomic opt
 	atomic.AddInt64(&f.opts, 1)
 
 	//check and call the connected cb of outside
@@ -340,17 +343,9 @@ func (f *Bucket) removeConnect(connId int64) {
 }
 
 //rebuild
-func (f *Bucket) rebuild(skipLocks ...bool) {
-	var (
-		skipLock bool
-	)
-	if len(skipLocks) > 0 {
-		skipLock = skipLocks[0]
-	}
-	if !skipLock {
-		f.Lock()
-		defer f.Unlock()
-	}
+func (f *Bucket) rebuild() {
+	f.Lock()
+	defer f.Unlock()
 	newConnMap := map[int64]iface.IConnector{}
 	for k, v := range f.connMap {
 		newConnMap[k] = v

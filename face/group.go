@@ -115,14 +115,13 @@ func (f *Group) CloseConn(connId int64) error {
 
 	//remove conn from map
 	f.Lock()
-	defer func() {
-		f.Unlock()
-		//check and call the closed cb of outside
-		if f.conf != nil && f.conf.CBForClosed != nil {
-			f.conf.CBForClosed(f, f.groupId, connId)
-		}
-	}()
 	delete(f.connMap, connId)
+	f.Unlock()
+
+	//check and call the closed cb of outside
+	if f.conf != nil && f.conf.CBForClosed != nil {
+		f.conf.CBForClosed(f, f.groupId, connId)
+	}
 
 	if needRebuildNewMap || len(f.connMap) <= 0 {
 		f.rebuild()
@@ -205,6 +204,8 @@ func (f *Group) AddConn(connId int64, conn *websocket.Conn, timeouts ...time.Dur
 //rebuild inter map
 func (f *Group) rebuild() {
 	//release old conn map
+	f.Lock()
+	defer f.Unlock()
 	newConnMap := map[int64]iface.IConnector{}
 	for k, v := range f.connMap {
 		newConnMap[k] = v
