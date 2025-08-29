@@ -60,11 +60,6 @@ func (f *Connector) GetActiveTime() int64 {
 	return f.activeTime
 }
 
-//update active time
-func (f *Connector) UpdateActiveTime(ts int64) {
-	f.activeTime = ts
-}
-
 //get owner id
 func (f *Connector) GetOwnerId() int64 {
 	return f.ownerId
@@ -118,34 +113,6 @@ func (f *Connector) GetConn() *websocket.Conn {
 	return f.conn
 }
 
-//pop queue to write
-func (f *Connector) queuePopProcess() {
-	var (
-		data []byte
-		isOk bool
-	)
-	//defer opt
-	defer func() {
-		close(f.writeChan)
-	}()
-
-	//loop
-	for {
-		select {
-		case data, isOk = <- f.writeChan:
-			{
-				if isOk && data != nil {
-					f.conn.Write(data)
-				}
-			}
-		case <- f.closeChan:
-			{
-				return
-			}
-		}
-	}
-}
-
 //push to write queue
 func (f *Connector) QueueWrite(data []byte) error {
 	//check
@@ -184,7 +151,7 @@ func (f *Connector) Write(data interface{}, messageTypes ...int) error {
 
 	//update active time
 	defer func() {
-		f.UpdateActiveTime(time.Now().Unix())
+		f.updateActiveTime(time.Now().Unix())
 	}()
 
 	//set write deadline
@@ -230,7 +197,7 @@ func (f *Connector) Read(messageTypes ...int) (interface{}, error) {
 
 	//update active time
 	defer func() {
-		f.UpdateActiveTime(time.Now().Unix())
+		f.updateActiveTime(time.Now().Unix())
 	}()
 
 	//receive data
@@ -250,6 +217,39 @@ func (f *Connector) Read(messageTypes ...int) (interface{}, error) {
 			var data []byte
 			err = websocket.Message.Receive(f.conn, &data)
 			return data, err
+		}
+	}
+}
+
+//update active time
+func (f *Connector) updateActiveTime(ts int64) {
+	f.activeTime = ts
+}
+
+//pop queue to write
+func (f *Connector) queuePopProcess() {
+	var (
+		data []byte
+		isOk bool
+	)
+	//defer opt
+	defer func() {
+		close(f.writeChan)
+	}()
+
+	//loop
+	for {
+		select {
+		case data, isOk = <- f.writeChan:
+			{
+				if isOk && data != nil {
+					f.conn.Write(data)
+				}
+			}
+		case <- f.closeChan:
+			{
+				return
+			}
 		}
 	}
 }
@@ -277,7 +277,7 @@ func (f *Connector) interInit(timeouts ...time.Duration) {
 	}
 
 	//update active time
-	f.UpdateActiveTime(time.Now().Unix())
+	f.updateActiveTime(time.Now().Unix())
 
 	//run queue pop process
 	go f.queuePopProcess()

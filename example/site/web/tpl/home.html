@@ -63,14 +63,19 @@
           return JSON.stringify(obj);
         }
 
+        function genId() {
+            return Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
+        }
+
         $(document).ready(function() {
             // WebSocket服务器地址，根据实际情况修改
             //const wsUrl = 'ws://localhost:8080/group/<groupId>?para1=val1&para2=val2';
-            const wsUrl = 'ws://localhost:8080/group/1?name=test&age=10';
+            const wsUrl = 'ws://localhost:8080/group/1?name=test&age=1';
             const ws = new WebSocket(wsUrl);
             const $messageContainer = $('#message-container');
             const $messageInput = $('#message-input');
             const $sendBtn = $('#send-btn');
+            const curUserId = genId();
 
             // 连接建立时
             ws.onopen = function() {
@@ -80,7 +85,17 @@
             // 接收消息时
             ws.onmessage = function(event) {
                 console.log("on.message, event:"+event.data);
-                addMessage('服务器', event.data, 'other');
+                var messageObj = decJsonStr(event.data);
+                if(typeof(messageObj) == "undefined" || messageObj == null) {
+                    console.log(("messageObj is null"));
+                    return
+                }
+                console.log("uid:"+messageObj.userId+", message:"+messageObj.message);
+                if(messageObj.userId == curUserId) {
+                    addMessage('服务器', messageObj.message, 'self');
+                }else{
+                    addMessage('服务器', messageObj.message, 'other');
+                }
             };
 
             // 错误处理
@@ -97,11 +112,12 @@
             function sendMessage() {
                 const message = $messageInput.val().trim();
                 if (message) {
-                    // var messageObj = new Object();
-                    // messageObj.messge = message;
-                    //ws.send(JSON.stringify(messageObj));
-                    ws.send(message);
-                    addMessage('我', message, 'self');
+                    var messageObj = new Object();
+                    messageObj.message = message;
+                    messageObj.userId = curUserId;
+                    ws.send(encJsonObj(messageObj));
+                    //ws.send(message);
+                    //addMessage('我', message, 'self');
                     $messageInput.val('');
                 }
             }
