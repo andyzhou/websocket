@@ -63,6 +63,7 @@
           return JSON.stringify(obj);
         }
 
+        //gen new user id
         function genId() {
             return Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
         }
@@ -84,6 +85,7 @@
 
             // 接收消息时
             ws.onmessage = function(event) {
+                //decode received message from ws server
                 console.log("on.message, event:"+event.data);
                 var messageObj = decJsonStr(event.data);
                 if(typeof(messageObj) == "undefined" || messageObj == null) {
@@ -112,12 +114,11 @@
             function sendMessage() {
                 const message = $messageInput.val().trim();
                 if (message) {
+                    //send new message to ws server
                     var messageObj = new Object();
                     messageObj.message = message;
                     messageObj.userId = curUserId;
                     ws.send(encJsonObj(messageObj));
-                    //ws.send(message);
-                    //addMessage('我', message, 'self');
                     $messageInput.val('');
                 }
             }
