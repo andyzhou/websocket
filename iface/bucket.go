@@ -16,6 +16,7 @@ type IBucket interface {
 	//gen opt
 	Quit()
 	Broadcast(data *gvar.MsgData) error
+	SetOwner(connId, ownerId int64) error
 
 	//for connect
 	CloseConn(connId int64) error

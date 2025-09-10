@@ -20,6 +20,7 @@ type IGroup interface {
 	GetId() int64
 
 	//for connect
+	SetOwner(connId, ownerId int64) error
 	CloseConn(connId int64) error
 	GetConnByOwnerId(ownerId int64) (IConnector, error)
 	GetConn(connId int64) (IConnector, error)

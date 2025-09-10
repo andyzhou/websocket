@@ -31,9 +31,11 @@ type Bucket struct {
 	router         iface.IRouter              //reference
 	conf           *gvar.RouterConf           //reference of parent router
 	connMap        map[int64]iface.IConnector //connId -> IConnector
+	connOwnerMap   map[int64]int64            //ownerId -> connId
 	writeChan      chan gvar.MsgData
 	writeCloseChan chan bool
 	opts           int64
+	ownerLock      sync.RWMutex
 	sync.RWMutex
 	Util
 }
@@ -97,6 +99,32 @@ func (f *Bucket) Broadcast(data *gvar.MsgData) error {
 	return nil
 }
 
+//set conn owner id
+func (f *Bucket) SetOwner(connId, ownerId int64) error {
+	//check
+	if connId <= 0 || ownerId <= 0 {
+		return errors.New("invalid parameter")
+	}
+
+	//get connector
+	connector, err := f.GetConn(connId)
+	if err != nil {
+		return err
+	}
+	if connector == nil {
+		return errors.New("can't get connector by id")
+	}
+
+	//set connect owner
+	connector.SetOwnerId(ownerId)
+
+	//set owner and conn id
+	f.ownerLock.Lock()
+	defer f.ownerLock.Unlock()
+	f.connOwnerMap[ownerId] = connId
+	return nil
+}
+
 //close old connect
 func (f *Bucket) CloseConn(connId int64) error {
 	//check
@@ -116,10 +144,14 @@ func (f *Bucket) CloseConn(connId int64) error {
 	delete(f.connMap, connId)
 	f.Unlock()
 
-	//atomic opt
-	if f.opts > 0 {
-		atomic.AddInt64(&f.opts, 1)
+	if connector.GetOwnerId() > 0 {
+		f.ownerLock.Lock()
+		delete(f.connOwnerMap, connector.GetOwnerId())
+		f.ownerLock.Unlock()
 	}
+
+	//atomic opt
+	atomic.AddInt64(&f.opts, 1)
 
 	//check and call the closed cb of outside
 	if f.conf != nil && f.conf.CBForClosed != nil {
@@ -197,9 +229,6 @@ func (f *Bucket) AddConn(connId int64, conn *websocket.Conn, timeouts ...time.Du
 	f.connMap[connId] = connector
 	f.Unlock()
 
-	//atomic opt
-	atomic.AddInt64(&f.opts, 1)
-
 	//check and call the connected cb of outside
 	if f.conf != nil && f.conf.CBForConnected != nil {
 		f.conf.CBForConnected(f.router, connId)
@@ -210,6 +239,23 @@ func (f *Bucket) AddConn(connId int64, conn *websocket.Conn, timeouts ...time.Du
 ////////////////
 //private func
 ////////////////
+
+//get conn id by owner id
+func (f *Bucket) getConnIdByOwnerId(ownerId int64) (int64, error) {
+	//check
+	if ownerId <= 0 {
+		return 0, errors.New("invalid parameter")
+	}
+
+	//get connect id with locker
+	f.ownerLock.Lock()
+	defer f.ownerLock.Unlock()
+	v, ok := f.connOwnerMap[ownerId]
+	if ok && v > 0 {
+		return v, nil
+	}
+	return 0, errors.New("no connect id by owner id")
+}
 
 //one conn read loop
 //fix multi concurrency read issue
@@ -268,6 +314,32 @@ func (f *Bucket) subWriteOpt(data *gvar.MsgData) error {
 
 	f.Lock()
 	defer f.Unlock()
+
+	//send by owner ids
+	if data.OwnerIds != nil && len(data.OwnerIds) > 0 {
+		for _, ownerId := range data.OwnerIds {
+			if ownerId <= 0 {
+				continue
+			}
+			connId, _ := f.getConnIdByOwnerId(ownerId)
+			if connId <= 0 {
+				continue
+			}
+			conn, ok := f.connMap[connId]
+			if !ok || conn == nil {
+				continue
+			}
+
+			//write to target conn
+			if data.WriteInQueue {
+				conn.QueueWrite(byteData)
+			}else{
+				conn.Write(data.Data, f.conf.MessageType)
+			}
+		}
+	}
+
+	//send by conn ids
 	if data.ConnIds != nil && len(data.ConnIds) > 0 {
 		//send to assigned connect ids
 		for _, connId := range data.ConnIds {
@@ -354,12 +426,21 @@ func (f *Bucket) removeConnect(connId int64) {
 //rebuild
 func (f *Bucket) rebuild() {
 	f.Lock()
-	defer f.Unlock()
 	newConnMap := map[int64]iface.IConnector{}
 	for k, v := range f.connMap {
 		newConnMap[k] = v
 	}
 	f.connMap = newConnMap
+	f.Unlock()
+
+	f.ownerLock.Lock()
+	newOwnerMap := map[int64]int64{}
+	for k, v := range f.connOwnerMap {
+		newOwnerMap[k] = v
+	}
+	f.connOwnerMap = newOwnerMap
+	f.ownerLock.Unlock()
+
 	atomic.StoreInt64(&f.opts, 0)
 
 	//force gc opt

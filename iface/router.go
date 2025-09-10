@@ -16,5 +16,6 @@ type IRouter interface {
 	GetConf() *gvar.RouterConf
 	GetConnector(connId int64) (IConnector, error)
 	Cast(msg *gvar.MsgData) error
+	SetOwner(connId, ownerId int64) error
 	Entry(conn *websocket.Conn)
 }

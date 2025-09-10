@@ -15,6 +15,7 @@ import (
  * @author <AndyZhou>
  * @mail <diudiu8848@163.com>
  * persistent websocket router face
+ * - multi buckets contain connections
  */
 
 //face info
@@ -68,6 +69,27 @@ func (f *Router) GetConnector(connId int64) (iface.IConnector, error) {
 
 	//get target connector
 	return targetBucket.GetConn(connId)
+}
+
+//set connect owner id
+func (f *Router) SetOwner(connId, ownerId int64) error {
+	//check
+	if connId <= 0 || ownerId <= 0 {
+		return errors.New("invalid parameter")
+	}
+
+	//get target bucket
+	bucket, err := f.getBucketByConnId(connId)
+	if err != nil || bucket == nil {
+		if err != nil {
+			return err
+		}
+		return errors.New("can't get bucket by id")
+	}
+
+	//set connector owner
+	err = bucket.SetOwner(connId, ownerId)
+	return err
 }
 
 //broad cast data

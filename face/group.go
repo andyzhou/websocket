@@ -29,6 +29,7 @@ type Group struct {
 	groupId        int64
 	conf           *gvar.GroupConf //group config reference
 	connMap        map[int64]iface.IConnector //connId -> IConnector
+	connOwnerMap   map[int64]int64 //ownerId -> connId
 	writeChan      chan gvar.MsgData
 	writeCloseChan chan bool
 	sync.RWMutex
@@ -41,6 +42,7 @@ func NewGroup(groupId int64, cfg *gvar.GroupConf) *Group {
 		groupId:        groupId,
 		conf:           cfg,
 		connMap:        map[int64]iface.IConnector{},
+		connOwnerMap:   map[int64]int64{},
 		writeChan:      make(chan gvar.MsgData, define.DefaultGroupWriteChan),
 		writeCloseChan: make(chan bool, 1),
 	}
@@ -99,6 +101,26 @@ func (f *Group) GetTotal() int {
 	return len(f.connMap)
 }
 
+//set conn owner id
+func (f *Group) SetOwner(connId, ownerId int64) error {
+	//check
+	if connId <= 0 || ownerId <= 0 {
+		return errors.New("invalid parameter")
+	}
+
+	//get connector
+	connector, _ := f.GetConn(connId)
+	if connector == nil {
+		return errors.New("can't get connector by id")
+	}
+	connector.SetOwnerId(ownerId)
+
+	f.Lock()
+	defer f.Unlock()
+	f.connOwnerMap[ownerId] = connId
+	return nil
+}
+
 //close old connect
 func (f *Group) CloseConn(connId int64) error {
 	//check
@@ -122,6 +144,7 @@ func (f *Group) CloseConn(connId int64) error {
 	//remove conn from map
 	f.Lock()
 	delete(f.connMap, connId)
+	delete(f.connOwnerMap, connector.GetOwnerId())
 	f.Unlock()
 
 	//check and call the closed cb of outside
@@ -137,9 +160,6 @@ func (f *Group) CloseConn(connId int64) error {
 
 //get connector by owner id
 func (f *Group) GetConnByOwnerId(ownerId int64) (iface.IConnector, error) {
-	var (
-		targetConnector iface.IConnector
-	)
 	//check
 	if ownerId <= 0 {
 		return nil, errors.New("invalid parameter")
@@ -148,16 +168,17 @@ func (f *Group) GetConnByOwnerId(ownerId int64) (iface.IConnector, error) {
 	//loop map to found
 	f.Lock()
 	defer f.Unlock()
-	for _, v := range f.connMap {
-		connector, ok := v.(iface.IConnector)
-		if ok && connector != nil {
-			if connector.GetOwnerId() == ownerId {
-				targetConnector = connector
-				break
-			}
-		}
+	connId, ok := f.connOwnerMap[ownerId]
+	if !ok || connId <= 0 {
+		return nil, errors.New("can't get owner id")
 	}
-	return targetConnector, nil
+
+	//get conn by id
+	connector, sok := f.connMap[connId]
+	if !sok || connector == nil {
+		return nil, errors.New("can't get connector by id")
+	}
+	return connector, nil
 }
 
 //get old connect
@@ -292,6 +313,33 @@ func (f *Group) writeLoop() {
 
 		f.Lock()
 		defer f.Unlock()
+
+		//send by owner ids
+		if data.OwnerIds != nil && len(data.OwnerIds) > 0 {
+			for _, ownerId := range data.OwnerIds {
+				if ownerId <= 0 {
+					continue
+				}
+				connId, ok := f.connOwnerMap[ownerId]
+				if !ok || connId <= 0 {
+					continue
+				}
+				v, ok := f.connMap[connId]
+				if ok && v != nil {
+					connector, sok := v.(iface.IConnector)
+					if sok && connector != nil {
+						//write to target conn
+						if data.WriteInQueue {
+							connector.QueueWrite(byteData)
+						}else{
+							connector.Write(data.Data, f.conf.MessageType)
+						}
+					}
+				}
+			}
+		}
+
+		//send by conn ids
 		if data.ConnIds != nil && len(data.ConnIds) > 0 {
 			//send to assigned connect ids
 			for _, connId := range data.ConnIds {
