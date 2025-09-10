@@ -121,6 +121,38 @@ func (f *Group) SetOwner(connId, ownerId int64) error {
 	return nil
 }
 
+//remove old connect
+func (f *Group) RemoveConn(connId int64) error {
+	//check
+	if connId <= 0 {
+		return errors.New("invalid parameter")
+	}
+
+	//get conn obj
+	connector, _ := f.GetConn(connId)
+	if connector == nil {
+		return errors.New("no such conn by id")
+	}
+
+	//hit gc rate
+	gcRate := rand.Intn(define.FullPercent)
+	needRebuildNewMap := false
+	if gcRate > 0 && gcRate <= define.DynamicGroupGcRate {
+		needRebuildNewMap = true
+	}
+
+	//remove conn from map
+	f.Lock()
+	delete(f.connMap, connId)
+	delete(f.connOwnerMap, connector.GetOwnerId())
+	f.Unlock()
+
+	if needRebuildNewMap || len(f.connMap) <= 0 {
+		f.rebuild()
+	}
+	return nil
+}
+
 //close old connect
 func (f *Group) CloseConn(connId int64) error {
 	//check
