@@ -1,6 +1,9 @@
 package iface
 
-import "golang.org/x/net/websocket"
+import (
+	"golang.org/x/net/websocket"
+	"net/url"
+)
 
 /*
  * @author <AndyZhou>
@@ -12,7 +15,7 @@ type IConnector interface {
 	Close()
 	CloseWithMessage(message string) error
 	GetUriParas() map[string]string
-	GetUriQueryPara(keyName string) string
+	GetUriQueryParas() url.Values
 	GetActiveTime() int64
 	SetConfId(bucketId int, groupId int64)
 

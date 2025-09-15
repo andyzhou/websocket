@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/url"
 	"time"
 
 	"github.com/andyzhou/websocket/gvar"
@@ -122,11 +123,11 @@ func (f *Connector) GetUriParas() map[string]string {
 	return mux.Vars(f.conn.Request())
 }
 
-func (f *Connector) GetUriQueryPara(keyName string) string {
+func (f *Connector) GetUriQueryParas() url.Values {
 	if f.conn == nil {
-		return ""
+		return nil
 	}
-	return f.conn.Request().URL.Query().Get(keyName)
+	return f.conn.Request().URL.Query()
 }
 
 //get origin connect reference

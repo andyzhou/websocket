@@ -17,6 +17,7 @@ import (
  * @mail <diudiu8848@163.com>
  * persistent websocket router face
  * - multi buckets contain connections
+ * - support dynamic switch bucket
  */
 
 //face info
@@ -54,14 +55,24 @@ func (f *Router) GetConf() *gvar.RouterConf {
 }
 
 //get connector by id
-func (f *Router) GetConnector(connId int64) (iface.IConnector, error) {
+func (f *Router) GetConnector(connId int64, bucketIdxes ...int) (iface.IConnector, error) {
+	var (
+		targetBucket iface.IBucket
+		err error
+	)
 	//check
 	if connId <= 0 {
 		return nil, errors.New("invalid parameter")
 	}
 
-	//get target bucket by conn id
-	targetBucket, err := f.getBucketByConnId(connId)
+	if len(bucketIdxes) > 0 {
+		//get target bucket by idx
+		bucketIdx := bucketIdxes[0]
+		targetBucket, err = f.getBucket(bucketIdx)
+	}else{
+		//get target bucket by conn id
+		targetBucket, err = f.getBucketByConnId(connId)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -74,15 +85,24 @@ func (f *Router) GetConnector(connId int64) (iface.IConnector, error) {
 }
 
 //set connect owner id
-func (f *Router) SetOwner(connId, ownerId int64) error {
+func (f *Router) SetOwner(connId, ownerId int64, bucketIdxes ...int) error {
+	var (
+		targetBucket iface.IBucket
+		err error
+	)
 	//check
 	if connId <= 0 || ownerId <= 0 {
 		return errors.New("invalid parameter")
 	}
-
-	//get target bucket
-	bucket, err := f.getBucketByConnId(connId)
-	if err != nil || bucket == nil {
+	if len(bucketIdxes) > 0 {
+		//get target bucket by idx
+		bucketIdx := bucketIdxes[0]
+		targetBucket, err = f.getBucket(bucketIdx)
+	}else{
+		//get target bucket by conn id
+		targetBucket, err = f.getBucketByConnId(connId)
+	}
+	if err != nil || targetBucket == nil {
 		if err != nil {
 			return err
 		}
@@ -90,7 +110,7 @@ func (f *Router) SetOwner(connId, ownerId int64) error {
 	}
 
 	//set connector owner
-	err = bucket.SetOwner(connId, ownerId)
+	err = targetBucket.SetOwner(connId, ownerId)
 	return err
 }
 

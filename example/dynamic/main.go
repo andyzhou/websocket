@@ -54,8 +54,9 @@ func cbForConnected(group interface{}, groupId int64, connId int64) error {
 	//get origin connect and path para
 	conn, _ := groupObj.GetConn(connId)
 	pathParas := conn.GetUriParas()
-	nameVal := conn.GetUriQueryPara("name")
-	ageVal := conn.GetUriQueryPara("age")
+	queryParas := conn.GetUriQueryParas()
+	nameVal := queryParas.Get("name")
+	ageVal := queryParas.Get("age")
 
 	log.Printf("example.cbForConnected, groupId:%v, connId:%v, pathParas:%v, nameVal:%v, ageVal:%v\n",
 		groupId, connId, pathParas, nameVal, ageVal)
