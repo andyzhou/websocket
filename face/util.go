@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
+	"github.com/gorilla/mux"
+	"golang.org/x/net/websocket"
 	"math/rand"
+	"net/url"
 	"reflect"
 	"time"
 	"unsafe"
@@ -18,6 +21,37 @@ import (
 
 //face info
 type Util struct {}
+
+//get query para
+func (f *Util) GetQueryParas(conn *websocket.Conn) (url.Values, error) {
+	//check
+	if conn == nil {
+		return nil, errors.New("invalid parameter")
+	}
+
+	//get origin request paras
+	httpReq := conn.Request()
+	queryParas := httpReq.URL.Query()
+	return queryParas, nil
+}
+
+//get path para
+func (f *Util) GetPathPara(conn *websocket.Conn, paraName string) (string, error) {
+	//check
+	if conn == nil || paraName == "" {
+		return "", errors.New("invalid parameter")
+	}
+
+	//get all path params
+	pathParams := mux.Vars(conn.Request())
+	if pathParams == nil || len(pathParams) <= 0 {
+		return "", nil
+	}
+
+	//get para value
+	paraVal, _ := pathParams[paraName]
+	return paraVal, nil
+}
 
 //check chan is closed or not
 //true:closed, false:opening

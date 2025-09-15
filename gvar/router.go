@@ -19,7 +19,8 @@ type (
 	RouterConf struct {
 		//general
 		Uri          string
-		Buckets      int //inter buckets count
+		BucketIdPara string //assigned bucket id para name
+		Buckets      int    //inter buckets count
 		ReadTimeout  time.Duration
 		WriteTimeout time.Duration
 		MessageType  int
@@ -49,6 +50,7 @@ type (
 
 	MsgData struct {
 		Data         interface{}
+		BucketIds    []int
 		OwnerIds     []int64
 		ConnIds      []int64
 		WriteInQueue bool //if true, data should be []byte type

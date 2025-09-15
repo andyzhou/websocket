@@ -3,6 +3,7 @@ package face
 import (
 	"errors"
 	"log"
+	"strconv"
 	"sync/atomic"
 
 	"github.com/andyzhou/websocket/define"
@@ -24,6 +25,7 @@ type Router struct {
 	connId      int64                  //inter atomic conn id counter
 	buckets     int                    //total buckets of config
 	bucketMap   map[int]iface.IBucket  //bucket map container
+	Util
 }
 
 //construct
@@ -99,7 +101,18 @@ func (f *Router) Cast(msg *gvar.MsgData) error {
 		return errors.New("invalid parameter")
 	}
 
-	//cast to all buckets with locker
+	//cast to assigned buckets
+	if len(msg.BucketIds) > 0 {
+		for _, idx := range msg.BucketIds {
+			v, ok := f.bucketMap[idx]
+			if ok && v != nil {
+				v.Broadcast(msg)
+			}
+		}
+		return nil
+	}
+
+	//cast to all buckets
 	for _, v := range f.bucketMap {
 		v.Broadcast(msg)
 	}
@@ -107,9 +120,13 @@ func (f *Router) Cast(msg *gvar.MsgData) error {
 }
 
 //websocket request entry
+//ws conn init first time
 func (f *Router) Entry(conn *websocket.Conn) {
 	var (
-		newConnId int64
+		newConnId    int64
+		bucketId     int
+		targetBucket iface.IBucket
+		err          error
 	)
 	//check
 	if conn == nil {
@@ -127,8 +144,20 @@ func (f *Router) Entry(conn *websocket.Conn) {
 		return
 	}
 
-	//get target bucket by conn id
-	targetBucket, err := f.getBucketByConnId(newConnId)
+	if f.cfg.BucketIdPara != "" {
+		//get assigned bucket id pass request para
+		queryParas, _ := f.GetQueryParas(conn)
+		bucketIdVal := queryParas.Get(f.cfg.BucketIdPara)
+		bucketId, _ = strconv.Atoi(bucketIdVal)
+	}
+
+	if bucketId > 0 {
+		//get target by id
+		targetBucket, err = f.getBucket(bucketId)
+	}else{
+		//get target bucket by conn id
+		targetBucket, err = f.getBucketByConnId(newConnId)
+	}
 	if err != nil || targetBucket == nil {
 		log.Printf("router %v, can't get target bucket\n", f.cfg.Uri)
 		return
@@ -167,11 +196,11 @@ func (f *Router) getBucketByConnId(connId int64) (iface.IBucket, error) {
 		return nil, errors.New("invalid parameter")
 	}
 
-	//pick rand bucket by conn id
-	randBucketIdx := int(connId % int64(f.buckets))
+	//pick target bucket idx by conn id
+	targetBucketIdx := int(connId % int64(f.buckets))
 
 	//get target bucket with locker
-	targetBucket, err := f.getBucket(randBucketIdx)
+	targetBucket, err := f.getBucket(targetBucketIdx)
 	return targetBucket, err
 }
 

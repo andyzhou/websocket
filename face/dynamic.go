@@ -13,7 +13,6 @@ import (
 	"github.com/andyzhou/websocket/define"
 	"github.com/andyzhou/websocket/gvar"
 	"github.com/andyzhou/websocket/iface"
-	"github.com/gorilla/mux"
 	"golang.org/x/net/websocket"
 )
 
@@ -30,6 +29,7 @@ type Dynamic struct {
 	connId       int64                  //inter atomic conn id counter
 	groupMap     map[int64]iface.IGroup //dynamic group map
 	sync.RWMutex
+	Util
 }
 
 //construct
@@ -220,13 +220,9 @@ func (f *Dynamic) rebuild() {
 //get and verify group id para
 func (f *Dynamic) getAndVerifyGroupId(conn *websocket.Conn) (int64, error) {
 	//get group id from path para
-	params := mux.Vars(conn.Request())
-	if params == nil {
-		return 0, errors.New("can't get request params")
-	}
-	groupId, ok := params[define.GroupPathParaName]
-	if !ok || groupId == "" {
-		return 0, errors.New("can't get group para")
+	groupId, err := f.GetPathPara(conn, define.PathParaNameOfGroup)
+	if err != nil {
+		return 0, err
 	}
 
 	//convert
@@ -237,7 +233,7 @@ func (f *Dynamic) getAndVerifyGroupId(conn *websocket.Conn) (int64, error) {
 
 	//check the cb for verify group and run it
 	if f.cfg != nil && f.cfg.CBForVerifyGroup != nil {
-		err := f.cfg.CBForVerifyGroup(f.cfg.Uri, groupIdInt)
+		err = f.cfg.CBForVerifyGroup(f.cfg.Uri, groupIdInt)
 		if err != nil {
 			return 0, err
 		}

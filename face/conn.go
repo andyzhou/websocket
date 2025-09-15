@@ -19,7 +19,7 @@ import (
 
 //face info
 type Connector struct {
-	connId       int64 //origin conn id
+	connId       int64            //origin conn id
 	ownerId      int64
 	activeTime   int64
 	conn         *websocket.Conn //origin conn reference
@@ -37,8 +37,8 @@ func NewConnector(
 	conn *websocket.Conn,
 	timeouts ...time.Duration) *Connector {
 	this := &Connector{
-		connId: connId,
-		conn: conn,
+		connId:    connId,
+		conn:      conn,
 		writeChan: make(chan []byte, define.ConnWriteChanSize),
 		closeChan: make(chan bool, 1),
 	}

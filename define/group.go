@@ -7,5 +7,5 @@ const (
 )
 
 const (
-	GroupPathParaName = "group"
+	PathParaNameOfGroup = "group"
 )

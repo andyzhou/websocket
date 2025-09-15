@@ -172,6 +172,49 @@ func (f *Bucket) CloseConn(connId int64) error {
 	return nil
 }
 
+//remove old connect
+//return connOwner, error
+func (f *Bucket) RemoveConn(connId int64) (int64, error) {
+	//check
+	if connId <= 0 {
+		return 0, errors.New("invalid parameter")
+	}
+
+	//get conn by id
+	connector, _ := f.GetConn(connId)
+	if connector == nil {
+		return 0, errors.New("no such connector by id")
+	}
+	connOwner := connector.GetOwnerId()
+
+	//remove conn from map
+	f.Lock()
+	delete(f.connMap, connId)
+	f.Unlock()
+
+	if connector.GetOwnerId() > 0 {
+		f.ownerLock.Lock()
+		delete(f.connOwnerMap, connector.GetOwnerId())
+		f.ownerLock.Unlock()
+	}
+
+	//atomic opt
+	atomic.AddInt64(&f.opts, 1)
+
+	//hit gc rate
+	gcRate := rand.Intn(define.FullPercent)
+	needCopyNewMap := false
+	if gcRate > 0 && gcRate <= define.DynamicGroupGcRate {
+		needCopyNewMap = true
+	}
+
+	//release old map
+	if needCopyNewMap || len(f.connMap) <= 0 {
+		f.rebuild()
+	}
+	return connOwner, nil
+}
+
 //get connector by owner id
 func (f *Bucket) GetConnByOwnerId(ownerId int64) (iface.IConnector, error) {
 	var (
@@ -209,6 +252,18 @@ func (f *Bucket) GetConn(connId int64) (iface.IConnector, error) {
 		return nil, errors.New("no such connector")
 	}
 	return conn, nil
+}
+
+//attach new connect
+func (f *Bucket) AttachConn(conn *websocket.Conn, connId int64, ownerIds ...int64) error {
+	//check
+	if connId <= 0 || conn == nil {
+		return errors.New("invalid parameter")
+	}
+
+	//init new connector
+	//connector := NewConnector(connId, conn, timeouts...)
+	return nil
 }
 
 //add new connect
