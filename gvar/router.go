@@ -27,9 +27,9 @@ type (
 
 		//cb func for websocket
 		CBForGenConnId func() int64
-		CBForConnected func(router interface{}, connId int64) error
-		CBForClosed    func(router interface{}, connId int64) error
-		CBForRead      func(router interface{}, connId int64, messageType int, data interface{}) error
+		CBForConnected func(router interface{}, bucketId int, connId int64) error
+		CBForClosed    func(router interface{}, bucketId int, connId int64) error
+		CBForRead      func(router interface{}, bucketId int, connId int64, messageType int, data interface{}) error
 	}
 
 	//dynamic group conf

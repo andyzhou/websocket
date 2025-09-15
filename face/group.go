@@ -19,9 +19,9 @@ import (
 /*
  * @author <AndyZhou>
  * @mail <diudiu8848@163.com>
- * dynamic group face
+ * dynamic group for dynamic face
  * - one group id, one group obj
- * - all connect in one group
+ * - all connects in one group
  */
 
 //face info
@@ -121,38 +121,6 @@ func (f *Group) SetOwner(connId, ownerId int64) error {
 	return nil
 }
 
-//remove old connect
-func (f *Group) RemoveConn(connId int64) error {
-	//check
-	if connId <= 0 {
-		return errors.New("invalid parameter")
-	}
-
-	//get conn obj
-	connector, _ := f.GetConn(connId)
-	if connector == nil {
-		return errors.New("no such conn by id")
-	}
-
-	//hit gc rate
-	gcRate := rand.Intn(define.FullPercent)
-	needRebuildNewMap := false
-	if gcRate > 0 && gcRate <= define.DynamicGroupGcRate {
-		needRebuildNewMap = true
-	}
-
-	//remove conn from map
-	f.Lock()
-	delete(f.connMap, connId)
-	delete(f.connOwnerMap, connector.GetOwnerId())
-	f.Unlock()
-
-	if needRebuildNewMap || len(f.connMap) <= 0 {
-		f.rebuild()
-	}
-	return nil
-}
-
 //close old connect
 func (f *Group) CloseConn(connId int64) error {
 	//check
@@ -237,11 +205,24 @@ func (f *Group) AddConn(connId int64, conn *websocket.Conn, timeouts ...time.Dur
 		return errors.New("invalid parameter")
 	}
 
-	//init new connector
-	connector := NewConnector(connId, conn, timeouts...)
+	//setup connect config
+	cbForRead := func(connId int64, messageType int, data interface{}) error {
+		if f.conf.CBForRead != nil {
+			return f.conf.CBForRead(f, f.groupId, connId, messageType, data)
+		}
+		return nil
+	}
+	cbForClose := func(connId int64) error {
+		return f.CloseConn(connId)
+	}
+	connConf := &ConnConf{
+		MessageType: f.conf.MessageType,
+		CBForRead: cbForRead,
+		CBForClosed: cbForClose,
+	}
 
-	//spawn son process to read and write
-	go f.oneConnReadLoop(connector)
+	//init new connector
+	connector := NewConnector(connConf, connId, conn, timeouts...)
 
 	//sync into bucket map with locker
 	f.Lock()

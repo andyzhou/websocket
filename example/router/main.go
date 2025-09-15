@@ -28,27 +28,27 @@ var (
 )
 
 //cb for closed
-func cbForClosed(router interface{}, connId int64) error {
+func cbForClosed(router interface{}, bucketId int, connId int64) error {
 	routerObj, _ := router.(iface.IRouter)
 	if routerObj == nil {
 		return errors.New("invalid router")
 	}
-	log.Printf("example.cbForClosed, connId:%v\n", connId)
+	log.Printf("example.cbForClosed, bucketId:%v, connId:%v\n", bucketId, connId)
 	return nil
 }
 
 //cb for connected
-func cbForConnected(router interface{}, connId int64) error {
+func cbForConnected(router interface{}, bucketId int, connId int64) error {
 	routerObj, _ := router.(iface.IRouter)
 	if routerObj == nil {
 		return errors.New("invalid router")
 	}
-	log.Printf("example.cbForConnected, connId:%v\n", connId)
+	log.Printf("example.cbForConnected, bucketId:%v, connId:%v\n", bucketId, connId)
 	return nil
 }
 
 //cb for read data from client sent
-func cbForReadData(router interface{}, connId int64, messageType int, data interface{}) error {
+func cbForReadData(router interface{}, bucketId int, connId int64, messageType int, data interface{}) error {
 	var (
 		msgData *gvar.MsgData
 	)
@@ -56,7 +56,8 @@ func cbForReadData(router interface{}, connId int64, messageType int, data inter
 	if routerObj == nil {
 		return errors.New("invalid router")
 	}
-	log.Printf("example.cbForReadData, connId:%v, messageType:%v, data:%v\n", connId, messageType, data)
+	log.Printf("example.cbForReadData, bucketId:%v, connId:%v, messageType:%v, data:%v\n",
+		bucketId, connId, messageType, data)
 
 	//init msg data
 	msgData = s.GenMsgData()

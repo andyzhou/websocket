@@ -20,9 +20,9 @@ type IBucket interface {
 
 	//for connect
 	CloseConn(connId int64) error
-	RemoveConn(connId int64) (int64, error)
+	RemoveConn(connId int64) (IConnector, error)
 	GetConnByOwnerId(ownerId int64) (IConnector, error)
 	GetConn(connId int64) (IConnector, error)
-	AttachConn(conn *websocket.Conn, connId int64, ownerIds ...int64) error
+	AttachConn(connector IConnector) error
 	AddConn(connId int64, conn *websocket.Conn, timeouts ...time.Duration) error
 }

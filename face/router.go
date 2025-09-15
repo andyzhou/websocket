@@ -119,6 +119,32 @@ func (f *Router) Cast(msg *gvar.MsgData) error {
 	return nil
 }
 
+//switch target bucket
+func (f *Router) SwitchBucket(connectId int64, from, to int) error {
+	//check
+	if connectId <= 0 || from < 0 || to < 0 ||
+		from > f.buckets || to > f.buckets {
+		return errors.New("invalid parameter")
+	}
+
+	//get connector from `from` bucket
+	fromBucket, _ := f.getBucket(from)
+	toBucket, _ := f.getBucket(to)
+	if fromBucket == nil || toBucket == nil {
+		return errors.New("can't get from or to bucket")
+	}
+
+	//remove `from` bucket
+	connector, err := fromBucket.RemoveConn(connectId)
+	if err != nil || connector == nil {
+		return err
+	}
+
+	//attach `to` bucket
+	err = toBucket.AttachConn(connector)
+	return err
+}
+
 //websocket request entry
 //ws conn init first time
 func (f *Router) Entry(conn *websocket.Conn) {

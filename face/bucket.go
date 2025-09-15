@@ -21,8 +21,9 @@ import (
 /*
  * @author <AndyZhou>
  * @mail <diudiu8848@163.com>
- * sub bucket face for router
+ * sub bucket for router face
  * - one bucket service batch connections
+ * - support dynamic switch bucket
  */
 
 //face info
@@ -155,7 +156,7 @@ func (f *Bucket) CloseConn(connId int64) error {
 
 	//check and call the closed cb of outside
 	if f.conf != nil && f.conf.CBForClosed != nil {
-		f.conf.CBForClosed(f.router, connId)
+		f.conf.CBForClosed(f.router, f.bucketId, connId)
 	}
 
 	//hit gc rate
@@ -174,18 +175,17 @@ func (f *Bucket) CloseConn(connId int64) error {
 
 //remove old connect
 //return connOwner, error
-func (f *Bucket) RemoveConn(connId int64) (int64, error) {
+func (f *Bucket) RemoveConn(connId int64) (iface.IConnector, error) {
 	//check
 	if connId <= 0 {
-		return 0, errors.New("invalid parameter")
+		return nil, errors.New("invalid parameter")
 	}
 
 	//get conn by id
 	connector, _ := f.GetConn(connId)
 	if connector == nil {
-		return 0, errors.New("no such connector by id")
+		return nil, errors.New("no such connector by id")
 	}
-	connOwner := connector.GetOwnerId()
 
 	//remove conn from map
 	f.Lock()
@@ -212,7 +212,7 @@ func (f *Bucket) RemoveConn(connId int64) (int64, error) {
 	if needCopyNewMap || len(f.connMap) <= 0 {
 		f.rebuild()
 	}
-	return connOwner, nil
+	return connector, nil
 }
 
 //get connector by owner id
@@ -255,14 +255,17 @@ func (f *Bucket) GetConn(connId int64) (iface.IConnector, error) {
 }
 
 //attach new connect
-func (f *Bucket) AttachConn(conn *websocket.Conn, connId int64, ownerIds ...int64) error {
+func (f *Bucket) AttachConn(connector iface.IConnector) error {
 	//check
-	if connId <= 0 || conn == nil {
+	if connector == nil {
 		return errors.New("invalid parameter")
 	}
 
-	//init new connector
-	//connector := NewConnector(connId, conn, timeouts...)
+	//sync into bucket map with locker
+	f.Lock()
+	defer f.Unlock()
+	connector.SetConfId(f.bucketId, 0)
+	f.connMap[connector.GetConnId()] = connector
 	return nil
 }
 
@@ -273,11 +276,25 @@ func (f *Bucket) AddConn(connId int64, conn *websocket.Conn, timeouts ...time.Du
 		return errors.New("invalid parameter")
 	}
 
-	//init new connector
-	connector := NewConnector(connId, conn, timeouts...)
+	//setup connect config
+	cbForRead := func(connId int64, messageType int, data interface{}) error {
+		if f.conf.CBForRead != nil {
+			return f.conf.CBForRead(f.router, f.bucketId, connId, messageType, data)
+		}
+		return nil
+	}
+	cbForClose := func(connId int64) error {
+		return f.CloseConn(connId)
+	}
+	connConf := &ConnConf{
+		BucketId: f.bucketId,
+		MessageType: f.conf.MessageType,
+		CBForRead: cbForRead,
+		CBForClosed: cbForClose,
+	}
 
-	//spawn son process to read
-	go f.oneConnReadLoop(connector)
+	//init new connector
+	connector := NewConnector(connConf, connId, conn, timeouts...)
 
 	//sync into bucket map with locker
 	f.Lock()
@@ -286,7 +303,7 @@ func (f *Bucket) AddConn(connId int64, conn *websocket.Conn, timeouts ...time.Du
 
 	//check and call the connected cb of outside
 	if f.conf != nil && f.conf.CBForConnected != nil {
-		f.conf.CBForConnected(f.router, connId)
+		f.conf.CBForConnected(f.router, f.bucketId, connId)
 	}
 	return nil
 }
@@ -351,7 +368,7 @@ func (f *Bucket) oneConnReadLoop(conn iface.IConnector) {
 			//read data succeed
 			//check and call the read cb of outside
 			if f.conf != nil && f.conf.CBForRead != nil {
-				f.conf.CBForRead(f.router, conn.GetConnId(), f.conf.MessageType, data)
+				f.conf.CBForRead(f.router, f.bucketId, conn.GetConnId(), f.conf.MessageType, data)
 			}
 		}
 	}

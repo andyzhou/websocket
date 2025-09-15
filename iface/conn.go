@@ -14,6 +14,7 @@ type IConnector interface {
 	GetUriParas() map[string]string
 	GetUriQueryPara(keyName string) string
 	GetActiveTime() int64
+	SetConfId(bucketId int, groupId int64)
 
 	//owner id
 	GetOwnerId() int64

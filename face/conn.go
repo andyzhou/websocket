@@ -4,6 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/andyzhou/websocket/define"
+	"io"
+	"log"
+	"net"
 	"time"
 
 	"github.com/andyzhou/websocket/gvar"
@@ -17,9 +20,19 @@ import (
  * websocket connect face
  */
 
+//connect config
+type ConnConf struct {
+	BucketId    int
+	GroupId     int64
+	MessageType int
+	CBForClosed func(connId int64) error
+	CBForRead   func(connId int64, messageType int, data interface{}) error
+}
+
 //face info
 type Connector struct {
-	connId       int64            //origin conn id
+	conf         *ConnConf
+	connId       int64 //origin conn id
 	ownerId      int64
 	activeTime   int64
 	conn         *websocket.Conn //origin conn reference
@@ -33,10 +46,12 @@ type Connector struct {
 //construct
 //timeouts=> readTimeout, writeTimeout
 func NewConnector(
+	conf *ConnConf,
 	connId int64,
 	conn *websocket.Conn,
 	timeouts ...time.Duration) *Connector {
 	this := &Connector{
+		conf:      conf,
 		connId:    connId,
 		conn:      conn,
 		writeChan: make(chan []byte, define.ConnWriteChanSize),
@@ -53,6 +68,12 @@ func (f *Connector) Close() {
 		f.conn.Close()
 		f.conn = nil
 	}
+}
+
+//set config id
+func (f *Connector) SetConfId(bucketId int, groupId int64) {
+	f.conf.BucketId = bucketId
+	f.conf.GroupId = groupId
 }
 
 //get active time
@@ -226,8 +247,8 @@ func (f *Connector) updateActiveTime(ts int64) {
 	f.activeTime = ts
 }
 
-//pop queue to write
-func (f *Connector) queuePopProcess() {
+//write process
+func (f *Connector) writeProcess() {
 	var (
 		data []byte
 		isOk bool
@@ -249,6 +270,48 @@ func (f *Connector) queuePopProcess() {
 		case <- f.closeChan:
 			{
 				return
+			}
+		}
+	}
+}
+
+//read process
+func (f *Connector) readProcess() {
+	var (
+		data interface{}
+		m any = nil
+		err error
+	)
+
+	//defer opt
+	defer func() {
+		if pErr := recover(); pErr != m {
+			log.Printf("connect %v read process panic, err:%v\n", f.connId, pErr)
+		}
+	}()
+
+	//read loop
+	for {
+		//read data
+		data, err = f.Read(f.conf.MessageType)
+		if err != nil {
+			if err == io.EOF {
+				//lost or read a bad connect
+				//remove and force close connect
+				if f.conf.CBForClosed != nil {
+					f.conf.CBForClosed(f.GetConnId())
+				}
+				break
+			}
+			if netErr, sok := err.(net.Error); sok && netErr.Timeout() {
+				//read timeout
+				//do nothing
+			}
+		}else{
+			//read data succeed
+			//check and call the read cb of outside
+			if f.conf != nil && f.conf.CBForRead != nil {
+				f.conf.CBForRead(f.GetConnId(), f.conf.MessageType, data)
 			}
 		}
 	}
@@ -279,6 +342,9 @@ func (f *Connector) interInit(timeouts ...time.Duration) {
 	//update active time
 	f.updateActiveTime(time.Now().Unix())
 
-	//run queue pop process
-	go f.queuePopProcess()
+	//run write process
+	go f.writeProcess()
+
+	//run read process
+	go f.readProcess()
 }
