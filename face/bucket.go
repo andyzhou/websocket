@@ -3,10 +3,8 @@ package face
 import (
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"math/rand"
-	"net"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -226,8 +224,8 @@ func (f *Bucket) GetConnByOwnerId(ownerId int64) (iface.IConnector, error) {
 	}
 
 	//loop map to found
-	f.Lock()
-	defer f.Unlock()
+	f.RLock()
+	defer f.RUnlock()
 	for _, v := range f.connMap {
 		if v != nil && v.GetOwnerId() == ownerId {
 			targetConnector = v
@@ -245,8 +243,8 @@ func (f *Bucket) GetConn(connId int64) (iface.IConnector, error) {
 	}
 
 	//get connect by id
-	f.Lock()
-	defer f.Unlock()
+	f.RLock()
+	defer f.RUnlock()
 	conn, ok := f.connMap[connId]
 	if !ok || conn == nil {
 		return nil, errors.New("no such connector")
@@ -320,58 +318,13 @@ func (f *Bucket) getConnIdByOwnerId(ownerId int64) (int64, error) {
 	}
 
 	//get connect id with locker
-	f.ownerLock.Lock()
-	defer f.ownerLock.Unlock()
+	f.ownerLock.RLock()
+	defer f.ownerLock.RUnlock()
 	v, ok := f.connOwnerMap[ownerId]
 	if ok && v > 0 {
 		return v, nil
 	}
 	return 0, errors.New("no connect id by owner id")
-}
-
-//one conn read loop
-//fix multi concurrency read issue
-func (f *Bucket) oneConnReadLoop(conn iface.IConnector) {
-	var (
-		data interface{}
-		m any = nil
-		err error
-	)
-	//check
-	if conn == nil {
-		return
-	}
-
-	//defer opt
-	defer func() {
-		if pErr := recover(); pErr != m {
-			log.Printf("bucket %v oneConnReadLoop panic, err:%v\n", f.bucketId, pErr)
-		}
-	}()
-
-	//read loop
-	for {
-		//read data
-		data, err = conn.Read(f.conf.MessageType)
-		if err != nil {
-			if err == io.EOF {
-				//lost or read a bad connect
-				//remove and force close connect
-				f.CloseConn(conn.GetConnId())
-				break
-			}
-			if netErr, sok := err.(net.Error); sok && netErr.Timeout() {
-				//read timeout
-				//do nothing
-			}
-		}else{
-			//read data succeed
-			//check and call the read cb of outside
-			if f.conf != nil && f.conf.CBForRead != nil {
-				f.conf.CBForRead(f.router, f.bucketId, conn.GetConnId(), f.conf.MessageType, data)
-			}
-		}
-	}
 }
 
 //sub write message opt

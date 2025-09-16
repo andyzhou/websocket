@@ -96,8 +96,8 @@ func (f *Group) GetId() int64 {
 
 //get total connects
 func (f *Group) GetTotal() int {
-	f.Lock()
-	defer f.Unlock()
+	f.RLock()
+	defer f.RUnlock()
 	return len(f.connMap)
 }
 
@@ -166,8 +166,8 @@ func (f *Group) GetConnByOwnerId(ownerId int64) (iface.IConnector, error) {
 	}
 
 	//loop map to found
-	f.Lock()
-	defer f.Unlock()
+	f.RLock()
+	defer f.RUnlock()
 	connId, ok := f.connOwnerMap[ownerId]
 	if !ok || connId <= 0 {
 		return nil, errors.New("can't get owner id")
@@ -189,8 +189,8 @@ func (f *Group) GetConn(connId int64) (iface.IConnector, error) {
 	}
 
 	//get by connect id
-	f.Lock()
-	defer f.Unlock()
+	f.RLock()
+	defer f.RUnlock()
 	v, ok := f.connMap[connId]
 	if !ok || v == nil {
 		return nil, errors.New("no such connector")

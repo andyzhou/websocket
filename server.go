@@ -88,15 +88,15 @@ func (f *Server) Start(port int) error {
 
 //get all routers
 func (f *Server) GetAllRouters() map[string]iface.IRouter {
-	f.Lock()
-	defer f.Unlock()
+	f.RLock()
+	defer f.RUnlock()
 	return f.routerMap
 }
 
 //get all dynamics
 func (f *Server) GetAllDynamics() map[string]iface.IDynamic {
-	f.dynamicLocker.Lock()
-	defer f.dynamicLocker.Unlock()
+	f.dynamicLocker.RLocker()
+	defer f.dynamicLocker.RUnlock()
 	return f.dynamicMap
 }
 
@@ -108,8 +108,8 @@ func (f *Server) GetRouter(uri string) (iface.IRouter, error) {
 	}
 
 	//get by uri with locker
-	f.Lock()
-	defer f.Unlock()
+	f.RLock()
+	defer f.RUnlock()
 	v, ok := f.routerMap[uri]
 	if !ok || v == nil {
 		return nil, errors.New("no such router")
@@ -125,8 +125,8 @@ func (f *Server) GetDynamic(uri string) (iface.IDynamic, error) {
 	}
 
 	//get by uri with locker
-	f.dynamicLocker.Lock()
-	defer f.dynamicLocker.Unlock()
+	f.dynamicLocker.RLock()
+	defer f.dynamicLocker.RUnlock()
 	v, ok := f.dynamicMap[uri]
 	if !ok || v == nil {
 		return nil, errors.New("no such dynamic")

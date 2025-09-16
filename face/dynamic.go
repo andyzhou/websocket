@@ -103,8 +103,8 @@ func (f *Dynamic) GetGroup(groupId int64) (iface.IGroup, error) {
 	}
 
 	//get with locker
-	f.Lock()
-	defer f.Unlock()
+	f.RLock()
+	defer f.RUnlock()
 	v, ok := f.groupMap[groupId]
 	if !ok || v == nil {
 		return nil, errors.New("can't get group by id")
