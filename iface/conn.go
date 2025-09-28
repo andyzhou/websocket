@@ -23,6 +23,10 @@ type IConnector interface {
 	GetOwnerId() int64
 	SetOwnerId(ownerId int64)
 
+	//get or set property
+	GetProp(kind string) (interface{}, error)
+	SetProp(kind string, val interface{}) error
+
 	//read and write
 	QueueWrite(data []byte) error
 	Write(data interface{}, messageTypes ...int) error

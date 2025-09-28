@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/andyzhou/websocket/gvar"
@@ -37,10 +38,12 @@ type Connector struct {
 	ownerId      int64
 	activeTime   int64
 	conn         *websocket.Conn //origin conn reference
-	writeChan    chan []byte     //write byte chan
+	propertyMap  map[string]interface{}
+	writeChan    chan []byte //write byte chan
 	closeChan    chan bool
 	readTimeout  time.Duration
 	writeTimeout time.Duration
+	propLocker   sync.RWMutex
 	Util
 }
 
@@ -57,6 +60,7 @@ func NewConnector(
 		conn:      conn,
 		writeChan: make(chan []byte, define.ConnWriteChanSize),
 		closeChan: make(chan bool, 1),
+		propertyMap: map[string]interface{}{},
 	}
 	this.interInit(timeouts...)
 	return this
@@ -90,6 +94,35 @@ func (f *Connector) GetOwnerId() int64 {
 //set owner id
 func (f *Connector) SetOwnerId(ownerId int64) {
 	f.ownerId = ownerId
+}
+
+//get or set property
+func (f *Connector) GetProp(kind string) (interface{}, error) {
+	//check
+	if kind == "" {
+		return nil, errors.New("invalid parameter")
+	}
+
+	//get with locker
+	f.propLocker.RLock()
+	defer f.propLocker.RUnlock()
+	v, ok := f.propertyMap[kind]
+	if ok && v != nil {
+		return v, nil
+	}
+	return nil, errors.New("no such property")
+}
+func (f *Connector) SetProp(kind string, val interface{}) error {
+	//check
+	if kind == "" || val == nil {
+		return errors.New("invalid parameter")
+	}
+
+	//save with locker
+	f.propLocker.Lock()
+	defer f.propLocker.Unlock()
+	f.propertyMap[kind] = val
+	return nil
 }
 
 //close with message
