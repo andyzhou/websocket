@@ -24,6 +24,7 @@ type IConnector interface {
 	SetOwnerId(ownerId int64)
 
 	//get or set property
+	RemoveProp(kind string) error
 	GetProp(kind string) (interface{}, error)
 	SetProp(kind string, val interface{}) error
 

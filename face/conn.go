@@ -55,11 +55,11 @@ func NewConnector(
 	conn *websocket.Conn,
 	timeouts ...time.Duration) *Connector {
 	this := &Connector{
-		conf:      conf,
-		connId:    connId,
-		conn:      conn,
-		writeChan: make(chan []byte, define.ConnWriteChanSize),
-		closeChan: make(chan bool, 1),
+		conf:        conf,
+		connId:      connId,
+		conn:        conn,
+		writeChan:   make(chan []byte, define.ConnWriteChanSize),
+		closeChan:   make(chan bool, 1),
 		propertyMap: map[string]interface{}{},
 	}
 	this.interInit(timeouts...)
@@ -96,6 +96,20 @@ func (f *Connector) SetOwnerId(ownerId int64) {
 	f.ownerId = ownerId
 }
 
+//remove property
+func (f *Connector) RemoveProp(kind string) error {
+	//check
+	if kind == "" {
+		return errors.New("invalid parameter")
+	}
+
+	//remove with locker
+	f.propLocker.Lock()
+	defer f.propLocker.Unlock()
+	delete(f.propertyMap, kind)
+	return nil
+}
+
 //get or set property
 func (f *Connector) GetProp(kind string) (interface{}, error) {
 	//check
@@ -112,6 +126,7 @@ func (f *Connector) GetProp(kind string) (interface{}, error) {
 	}
 	return nil, errors.New("no such property")
 }
+
 func (f *Connector) SetProp(kind string, val interface{}) error {
 	//check
 	if kind == "" || val == nil {
