@@ -70,11 +70,6 @@ func (f *Bucket) Quit() {
 		}
 	}
 	f.connMap = nil
-
-	//release old map
-	atomic.StoreInt64(&f.opts, 0)
-	newConnMap := map[int64]iface.IConnector{}
-	f.connMap = newConnMap
 }
 
 //broadcast to connections by condition
