@@ -250,6 +250,7 @@ func (f *Connector) Read(messageTypes ...int) (interface{}, error) {
 	var (
 		messageType int
 		err error
+		m any
 	)
 	//check
 	if f.conn == nil {
@@ -259,16 +260,19 @@ func (f *Connector) Read(messageTypes ...int) (interface{}, error) {
 		messageType = messageTypes[0]
 	}
 
+	//update active time
+	defer func() {
+		f.updateActiveTime(time.Now().Unix())
+		if pErr := recover(); pErr != m {
+			log.Printf("connector.read panic, err:%v", pErr)
+		}
+	}()
+
 	//set read deadline
 	if f.conn == nil {
 		return nil, errors.New("connect is nil")
 	}
 	f.conn.SetReadDeadline(time.Now().Add(f.readTimeout))
-
-	//update active time
-	defer func() {
-		f.updateActiveTime(time.Now().Unix())
-	}()
 
 	//receive data
 	switch messageType {
