@@ -43,7 +43,9 @@ type Connector struct {
 	closeChan    chan bool
 	readTimeout  time.Duration
 	writeTimeout time.Duration
+	closeOnce    sync.Once
 	propLocker   sync.RWMutex
+	connLocker   sync.RWMutex
 	Util
 }
 
@@ -68,11 +70,15 @@ func NewConnector(
 
 //close
 func (f *Connector) Close() {
-	if f.conn != nil {
-		close(f.closeChan)
-		f.conn.Close()
-		f.conn = nil
-	}
+	f.closeOnce.Do(func() {
+		f.connLocker.Lock()
+		defer f.connLocker.Unlock()
+		if f.conn != nil {
+			close(f.closeChan)
+			f.conn.Close()
+			f.conn = nil
+		}
+	})
 }
 
 //set config id
@@ -225,21 +231,24 @@ func (f *Connector) Write(data interface{}, messageTypes ...int) error {
 	}()
 
 	//set write deadline
+	f.connLocker.Lock()
 	f.conn.SetWriteDeadline(time.Now().Add(f.writeTimeout))
+	conn := f.conn
+	f.connLocker.Unlock()
 
 	//send real data
 	switch messageType {
 	case gvar.MessageTypeOfJson:
 		{
 			//json format
-			err = websocket.JSON.Send(f.conn, data)
+			err = websocket.JSON.Send(conn, data)
 		}
 	case gvar.MessageTypeOfOctet:
 		fallthrough
 	default:
 		{
 			//general octet format
-			err = websocket.Message.Send(f.conn, data)
+			err = websocket.Message.Send(conn, data)
 		}
 	}
 	return err
@@ -253,9 +262,6 @@ func (f *Connector) Read(messageTypes ...int) (interface{}, error) {
 		m any
 	)
 	//check
-	if f.conn == nil {
-		return nil, errors.New("connect is nil")
-	}
 	if messageTypes != nil && len(messageTypes) > 0 {
 		messageType = messageTypes[0]
 	}
@@ -268,11 +274,15 @@ func (f *Connector) Read(messageTypes ...int) (interface{}, error) {
 		}
 	}()
 
-	//set read deadline
+	//opt with locker
+	f.connLocker.Lock()
 	if f.conn == nil {
 		return nil, errors.New("connect is nil")
 	}
+	//set read deadline
 	f.conn.SetReadDeadline(time.Now().Add(f.readTimeout))
+	conn := f.conn
+	f.connLocker.Unlock()
 
 	//receive data
 	switch messageType {
@@ -280,7 +290,7 @@ func (f *Connector) Read(messageTypes ...int) (interface{}, error) {
 		{
 			//json format
 			var data interface{}
-			err = websocket.JSON.Receive(f.conn, &data)
+			err = websocket.JSON.Receive(conn, &data)
 			return data, err
 		}
 	case gvar.MessageTypeOfOctet:
@@ -289,7 +299,7 @@ func (f *Connector) Read(messageTypes ...int) (interface{}, error) {
 		{
 			//general octet format
 			var data []byte
-			err = websocket.Message.Receive(f.conn, &data)
+			err = websocket.Message.Receive(conn, &data)
 			return data, err
 		}
 	}
@@ -298,6 +308,40 @@ func (f *Connector) Read(messageTypes ...int) (interface{}, error) {
 //update active time
 func (f *Connector) updateActiveTime(ts int64) {
 	f.activeTime = ts
+}
+
+//write pure data
+func (f *Connector) writePureData(data []byte) error {
+	//check
+	if data == nil {
+		return errors.New("invalid prameter")
+	}
+
+	//access cnonect with locker
+	f.connLocker.Lock()
+	conn := f.conn
+	f.connLocker.Unlock()
+	if conn == nil {
+		//conn has closed
+		return errors.New("conn is nil")
+	}
+
+	//setup write dead line
+	conn.SetWriteDeadline(time.Now().Add(f.writeTimeout))
+
+	//write data
+	_, err := conn.Write(data)
+	if err != nil {
+		if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) {
+			//connect closed
+			if f.conf != nil && f.conf.CBForClosed != nil {
+				f.conf.CBForClosed(f.connId)
+			}
+			return err
+		}
+		log.Printf("connect %v write error: %v", f.connId, err)
+	}
+	return err
 }
 
 //write process
@@ -317,7 +361,7 @@ func (f *Connector) writeProcess() {
 		case data, isOk = <- f.writeChan:
 			{
 				if isOk && data != nil {
-					f.conn.Write(data)
+					f.writePureData(data)
 				}
 			}
 		case <- f.closeChan:

@@ -144,7 +144,9 @@ func (f *Group) CloseConn(connId int64) error {
 	//remove conn from map
 	f.Lock()
 	delete(f.connMap, connId)
-	delete(f.connOwnerMap, connector.GetOwnerId())
+	if connector != nil {
+		delete(f.connOwnerMap, connector.GetOwnerId())
+	}
 	f.Unlock()
 
 	//check and call the closed cb of outside
