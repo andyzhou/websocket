@@ -157,10 +157,15 @@ func (f *Connector) CloseWithMessage(message string) error {
 	}
 
 	//write message before close it
-	f.conn.Write([]byte(message))
-	f.conn.Close()
-	f.conn = nil
-
+	f.closeOnce.Do(func() {
+		f.connLocker.Lock()
+		defer f.connLocker.Unlock()
+		if f.conn != nil {
+			f.conn.Write([]byte(message))
+			f.conn.Close()
+			f.conn = nil
+		}
+	})
 	return nil
 }
 
@@ -186,6 +191,8 @@ func (f *Connector) GetUriQueryParas() url.Values {
 
 //get origin connect reference
 func (f *Connector) GetConn() *websocket.Conn {
+	f.connLocker.RLock()
+	defer f.connLocker.RUnlock()
 	return f.conn
 }
 
@@ -277,6 +284,7 @@ func (f *Connector) Read(messageTypes ...int) (interface{}, error) {
 	//opt with locker
 	f.connLocker.Lock()
 	if f.conn == nil {
+		f.connLocker.Unlock()
 		return nil, errors.New("connect is nil")
 	}
 	//set read deadline
@@ -314,20 +322,19 @@ func (f *Connector) updateActiveTime(ts int64) {
 func (f *Connector) writePureData(data []byte) error {
 	//check
 	if data == nil {
-		return errors.New("invalid prameter")
+		return errors.New("invalid parameter")
 	}
 
-	//access cnonect with locker
+	//access connect with locker
 	f.connLocker.Lock()
-	conn := f.conn
-	f.connLocker.Unlock()
-	if conn == nil {
+	if f.conn == nil {
 		//conn has closed
 		return errors.New("conn is nil")
 	}
-
-	//setup write dead line
-	conn.SetWriteDeadline(time.Now().Add(f.writeTimeout))
+	//setup write deadline
+	f.conn.SetWriteDeadline(time.Now().Add(f.writeTimeout))
+	conn := f.conn
+	f.connLocker.Unlock()
 
 	//write data
 	_, err := conn.Write(data)
