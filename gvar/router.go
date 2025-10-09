@@ -1,6 +1,9 @@
 package gvar
 
-import "time"
+import (
+	"golang.org/x/net/websocket"
+	"time"
+)
 
 /*
  * @author <AndyZhou>
@@ -42,7 +45,7 @@ type (
 
 		//cb func for websocket
 		CBForGenConnId   func() int64
-		CBForVerifyGroup func(groupObj interface{}, groupId int64) error
+		CBForVerifyGroup func(conn *websocket.Conn, groupObj interface{}, groupId int64) error
 		CBForConnected   func(groupObj interface{}, groupId int64, connId int64) error
 		CBForClosed      func(groupObj interface{}, groupId int64, connId int64) error
 		CBForRead        func(groupObj interface{}, groupId int64, connId int64, messageType int, data interface{}) error

@@ -5,6 +5,8 @@ import (
 	"log"
 	"sync"
 
+	genWebsocket "golang.org/x/net/websocket"
+
 	"github.com/andyzhou/websocket"
 	"github.com/andyzhou/websocket/gvar"
 	"github.com/andyzhou/websocket/iface"
@@ -64,7 +66,7 @@ func cbForConnected(group interface{}, groupId int64, connId int64) error {
 }
 
 //cb for verify group
-func cbForVerifyGroup(group interface{}, groupId int64) error {
+func cbForVerifyGroup(conn *genWebsocket.Conn, group interface{}, groupId int64) error {
 	log.Printf("example.cbForVerifyGroup, groupId:%v\n", groupId)
 	return nil
 }

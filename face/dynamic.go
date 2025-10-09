@@ -233,7 +233,7 @@ func (f *Dynamic) getAndVerifyGroupId(conn *websocket.Conn) (int64, error) {
 
 	//check the cb for verify group and run it
 	if f.cfg != nil && f.cfg.CBForVerifyGroup != nil {
-		err = f.cfg.CBForVerifyGroup(f.cfg.Uri, groupIdInt)
+		err = f.cfg.CBForVerifyGroup(conn, f.cfg.Uri, groupIdInt)
 		if err != nil {
 			return 0, err
 		}
