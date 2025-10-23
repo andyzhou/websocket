@@ -239,6 +239,10 @@ func (f *Connector) Write(data interface{}, messageTypes ...int) error {
 
 	//set write deadline
 	f.connLocker.Lock()
+	if f.conn == nil {
+		f.connLocker.Unlock()
+		return errors.New("connect is nil")
+	}
 	f.conn.SetWriteDeadline(time.Now().Add(f.writeTimeout))
 	conn := f.conn
 	f.connLocker.Unlock()
