@@ -1,5 +1,7 @@
 package define
 
 const (
-	ConnWriteChanSize = 16
+	ConnWriteChanSize = 64
+	MessageChanSize   = 1024
+	ASyncWorkerNum    = 10
 )

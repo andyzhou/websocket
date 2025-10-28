@@ -24,28 +24,34 @@ import (
 
 //connect config
 type ConnConf struct {
-	BucketId    int
-	GroupId     int64
-	MessageType int
-	CBForClosed func(connId int64) error
-	CBForRead   func(connId int64, messageType int, data interface{}) error
+	BucketId       int
+	GroupId        int64
+	AsyncWorkerNum int
+	MessageType    int
+	CBForClosed    func(connId int64) error
+	CBForRead      func(connId int64, messageType int, data interface{}) error
 }
 
 //face info
 type Connector struct {
-	conf         *ConnConf
-	connId       int64 //origin conn id
-	ownerId      int64
-	activeTime   int64
-	conn         *websocket.Conn //origin conn reference
-	propertyMap  map[string]interface{}
-	writeChan    chan []byte //write byte chan
-	closeChan    chan bool
-	readTimeout  time.Duration
-	writeTimeout time.Duration
-	closeOnce    sync.Once
-	propLocker   sync.RWMutex
-	connLocker   sync.RWMutex
+	conf           *ConnConf
+	connId         int64 //origin conn id
+	ownerId        int64
+	activeTime     int64
+	conn           *websocket.Conn //origin conn reference
+	propertyMap    map[string]interface{}
+	writeChan      chan []byte //write byte chan
+	closeChan      chan bool
+	messageChan    chan interface{} //async message chan
+	asyncWorkerNum int              //async worker number
+	readTimeout    time.Duration
+	writeTimeout   time.Duration
+	readDeadline   time.Time
+	writeDeadline  time.Time
+	closeOnce      sync.Once
+	propLocker     sync.RWMutex
+	connLocker     sync.RWMutex
+	deadlineLocker sync.RWMutex
 	Util
 }
 
@@ -57,12 +63,14 @@ func NewConnector(
 	conn *websocket.Conn,
 	timeouts ...time.Duration) *Connector {
 	this := &Connector{
-		conf:        conf,
-		connId:      connId,
-		conn:        conn,
-		writeChan:   make(chan []byte, define.ConnWriteChanSize),
-		closeChan:   make(chan bool, 1),
-		propertyMap: map[string]interface{}{},
+		conf:           conf,
+		connId:         connId,
+		conn:           conn,
+		writeChan:      make(chan []byte, define.ConnWriteChanSize),
+		closeChan:      make(chan bool, 1),
+		propertyMap:    map[string]interface{}{},
+		messageChan:    make(chan interface{}, define.MessageChanSize),
+		asyncWorkerNum: define.ASyncWorkerNum,
 	}
 	this.interInit(timeouts...)
 	return this
@@ -285,16 +293,26 @@ func (f *Connector) Read(messageTypes ...int) (interface{}, error) {
 		}
 	}()
 
-	//opt with locker
-	f.connLocker.Lock()
+	//get connector reference
+	f.connLocker.RLock()
 	if f.conn == nil {
-		f.connLocker.Unlock()
+		f.connLocker.RUnlock()
 		return nil, errors.New("connect is nil")
 	}
-	//set read deadline
-	f.conn.SetReadDeadline(time.Now().Add(f.readTimeout))
 	conn := f.conn
-	f.connLocker.Unlock()
+
+	// 设置读取超时（减少锁范围）
+	f.deadlineLocker.RLock()
+	readDeadline := f.readDeadline
+	f.deadlineLocker.RUnlock()
+
+	if time.Now().After(readDeadline) {
+		f.deadlineLocker.Lock()
+		f.readDeadline = time.Now().Add(f.readTimeout)
+		conn.SetReadDeadline(f.readDeadline)
+		f.deadlineLocker.Unlock()
+	}
+	f.connLocker.RUnlock()
 
 	//receive data
 	switch messageType {
@@ -315,6 +333,13 @@ func (f *Connector) Read(messageTypes ...int) (interface{}, error) {
 			return data, err
 		}
 	}
+}
+
+//check connected or not
+func (f *Connector) isConnected() bool {
+	f.connLocker.RLock()
+	defer f.connLocker.RUnlock()
+	return f.conn != nil
 }
 
 //update active time
@@ -386,66 +411,97 @@ func (f *Connector) writeProcess() {
 //read process
 func (f *Connector) readProcess() {
 	var (
-		data interface{}
 		m any = nil
-		err error
 	)
-
-	//defer opt
 	defer func() {
 		if pErr := recover(); pErr != m {
 			log.Printf("connect %v read process panic, err:%v\n", f.connId, pErr)
 		}
+		//close message chan
+		close(f.messageChan)
 	}()
 
-	//read loop
+	//start async message worker
+	for i := 0; i < f.asyncWorkerNum; i++ {
+		go f.asyncMessageWorker()
+	}
+
 	for {
-		//read data
-		data, err = f.Read(f.conf.MessageType)
+		if !f.isConnected() {
+			continue
+		}
+		data, err := f.Read(f.conf.MessageType)
 		if err != nil {
 			if err == io.EOF {
-				//lost or read a bad connect
-				//remove and force close connect
 				if f.conf.CBForClosed != nil {
 					f.conf.CBForClosed(f.GetConnId())
 				}
 				break
 			}
 			if netErr, sok := err.(net.Error); sok && netErr.Timeout() {
-				//read timeout
-				//do nothing
+				//read timeout, but continue
+				continue
 			}
-		}else{
-			//read data succeed
-			//check and call the read cb of outside
-			if f.conf != nil && f.conf.CBForRead != nil {
-				f.conf.CBForRead(f.GetConnId(), f.conf.MessageType, data)
-			}
+			//other error, still continue
+			continue
+		}
+
+		//async process message
+		select {
+		case f.messageChan <- data:
+		default:
+			//queue full
+			log.Printf("connector %v message queue full, dropping message", f.connId)
+		}
+	}
+}
+
+//async message worker
+func (f *Connector) asyncMessageWorker() {
+	var(
+		m any = nil
+	)
+	for data := range f.messageChan {
+		if f.conf != nil && f.conf.CBForRead != nil {
+			//unblock read data
+			func(connId int64, messageType int, data interface{}) {
+				defer func() {
+					if r := recover(); r != m {
+						log.Printf("CBForRead panic: %v", r)
+					}
+				}()
+				f.conf.CBForRead(connId, messageType, data)
+			}(f.GetConnId(), f.conf.MessageType, data)
 		}
 	}
 }
 
 //inter init
 func (f *Connector) interInit(timeouts ...time.Duration) {
-	//setup timeouts
+	//setup default timeout
+	f.readTimeout = 30 * time.Second
+	f.writeTimeout = 10 * time.Second
+
+	//overwrite timeout config from outside
 	timeoutsLen := len(timeouts)
 	switch timeoutsLen {
 	case 1:
-		{
-			f.readTimeout = timeouts[0]
-		}
+		f.readTimeout = timeouts[0]
 	case 2:
-		{
-			f.readTimeout = timeouts[0]
-			f.writeTimeout = timeouts[1]
-		}
+		f.readTimeout = timeouts[0]
+		f.writeTimeout = timeouts[1]
 	}
-	if f.readTimeout <= 0 {
-		f.readTimeout = time.Second/10
+
+	//setup async worker num
+	if f.conf.AsyncWorkerNum > 0 {
+		f.asyncWorkerNum = f.conf.AsyncWorkerNum
 	}
-	if f.writeTimeout <= 0 {
-		f.writeTimeout = time.Second/10
-	}
+
+	//init deadline
+	f.deadlineLocker.Lock()
+	f.readDeadline = time.Now().Add(f.readTimeout)
+	f.writeDeadline = time.Now().Add(f.writeTimeout)
+	f.deadlineLocker.Unlock()
 
 	//update active time
 	f.updateActiveTime(time.Now().Unix())
