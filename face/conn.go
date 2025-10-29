@@ -34,24 +34,25 @@ type ConnConf struct {
 
 //face info
 type Connector struct {
-	conf           *ConnConf
-	connId         int64 //origin conn id
-	ownerId        int64
-	activeTime     int64
-	conn           *websocket.Conn //origin conn reference
-	propertyMap    map[string]interface{}
-	writeChan      chan []byte //write byte chan
-	closeChan      chan bool
-	messageChan    chan interface{} //async message chan
-	asyncWorkerNum int              //async worker number
-	readTimeout    time.Duration
-	writeTimeout   time.Duration
-	readDeadline   time.Time
-	writeDeadline  time.Time
-	closeOnce      sync.Once
-	propLocker     sync.RWMutex
-	connLocker     sync.RWMutex
-	deadlineLocker sync.RWMutex
+	conf             *ConnConf
+	connId           int64 //origin conn id
+	ownerId          int64
+	activeTime       int64
+	conn             *websocket.Conn //origin conn reference
+	propertyMap      map[string]interface{}
+	writeChan        chan []byte //write byte chan
+	closeChan        chan bool
+	messageChan      chan interface{} //async message chan
+	messageCloseChan chan bool
+	asyncWorkerNum   int //async worker number
+	readTimeout      time.Duration
+	writeTimeout     time.Duration
+	readDeadline     time.Time
+	writeDeadline    time.Time
+	closeOnce        sync.Once
+	propLocker       sync.RWMutex
+	connLocker       sync.RWMutex
+	deadlineLocker   sync.RWMutex
 	Util
 }
 
@@ -63,14 +64,15 @@ func NewConnector(
 	conn *websocket.Conn,
 	timeouts ...time.Duration) *Connector {
 	this := &Connector{
-		conf:           conf,
-		connId:         connId,
-		conn:           conn,
-		writeChan:      make(chan []byte, define.ConnWriteChanSize),
-		closeChan:      make(chan bool, 1),
-		propertyMap:    map[string]interface{}{},
-		messageChan:    make(chan interface{}, define.MessageChanSize),
-		asyncWorkerNum: define.ASyncWorkerNum,
+		conf:             conf,
+		connId:           connId,
+		conn:             conn,
+		writeChan:        make(chan []byte, define.ConnWriteChanSize),
+		closeChan:        make(chan bool, 1),
+		propertyMap:      map[string]interface{}{},
+		messageChan:      make(chan interface{}, define.MessageChanSize),
+		messageCloseChan: make(chan bool, 1),
+		asyncWorkerNum:   define.ASyncWorkerNum,
 	}
 	this.interInit(timeouts...)
 	return this
@@ -79,6 +81,7 @@ func NewConnector(
 //close
 func (f *Connector) Close() {
 	f.closeOnce.Do(func() {
+		close(f.messageCloseChan)
 		f.connLocker.Lock()
 		defer f.connLocker.Unlock()
 		if f.conn != nil {
@@ -166,6 +169,7 @@ func (f *Connector) CloseWithMessage(message string) error {
 
 	//write message before close it
 	f.closeOnce.Do(func() {
+		close(f.messageCloseChan)
 		f.connLocker.Lock()
 		defer f.connLocker.Unlock()
 		if f.conn != nil {
@@ -422,10 +426,9 @@ func (f *Connector) readProcess() {
 	}()
 
 	//start async message worker
-	for i := 0; i < f.asyncWorkerNum; i++ {
-		go f.asyncMessageWorker()
-	}
+	go f.asyncMessageWorker()
 
+	//read process loop
 	for {
 		if !f.isConnected() {
 			continue
@@ -459,19 +462,38 @@ func (f *Connector) readProcess() {
 //async message worker
 func (f *Connector) asyncMessageWorker() {
 	var(
+		data interface{}
+		isOk bool
 		m any = nil
 	)
-	for data := range f.messageChan {
-		if f.conf != nil && f.conf.CBForRead != nil {
-			//unblock read data
-			func(connId int64, messageType int, data interface{}) {
-				defer func() {
-					if r := recover(); r != m {
-						log.Printf("CBForRead panic: %v", r)
-					}
-				}()
-				f.conf.CBForRead(connId, messageType, data)
-			}(f.GetConnId(), f.conf.MessageType, data)
+	defer func() {
+		if r := recover(); r != m {
+			log.Printf("asyncMessageWorker panic: %v", r)
+		}
+	}()
+
+	//loop
+	for {
+		select {
+		case data, isOk = <- f.messageChan:
+			if isOk && &data != nil {
+				if f.conf != nil && f.conf.CBForRead != nil {
+					//unblock read data
+					func(connId int64, messageType int, data interface{}) {
+						defer func() {
+							if r := recover(); r != m {
+								log.Printf("CBForRead panic: %v", r)
+							}
+						}()
+						f.conf.CBForRead(connId, messageType, data)
+					}(f.GetConnId(), f.conf.MessageType, data)
+				}
+				break
+			}
+		case <- f.messageCloseChan:
+			{
+				return
+			}
 		}
 	}
 }
