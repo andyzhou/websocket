@@ -151,6 +151,7 @@ func main() {
 	wg.Add(1)
 	err = s.Start(WsPort)
 	if err != nil {
+		wg.Done()
 		panic(any(err))
 	}
 

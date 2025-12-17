@@ -28,7 +28,7 @@ type Server struct {
 	router        *mux.Router
 	routerMap     map[string]iface.IRouter  //persistent routers, uri -> IRouter
 	dynamicMap    map[string]iface.IDynamic //dynamic groups, uri -> IDynamic
-	wg            sync.WaitGroup
+	//wg            sync.WaitGroup
 	dynamicLocker sync.RWMutex
 	sync.RWMutex
 }
@@ -64,7 +64,6 @@ func (f *Server) Quit() {
 
 	//gc opt
 	runtime.GC()
-	f.wg.Done()
 }
 
 //start
@@ -79,10 +78,7 @@ func (f *Server) Start(port int) error {
 	f.hsm.Handle("/", f.router)
 
 	//listen port
-	f.wg.Add(1)
 	go http.ListenAndServe(address, f.hsm)
-
-	f.wg.Wait()
 	return nil
 }
 
