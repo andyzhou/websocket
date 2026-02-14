@@ -38,12 +38,17 @@ func cbForClosed(router interface{}, bucketId int, connId int64) error {
 }
 
 //cb for connected
-func cbForConnected(router interface{}, bucketId int, connId int64) error {
+func cbForConnected(router interface{}, bucketId int, connector interface{}) error {
 	routerObj, _ := router.(iface.IRouter)
 	if routerObj == nil {
 		return errors.New("invalid router")
 	}
-	log.Printf("example.cbForConnected, bucketId:%v, connId:%v\n", bucketId, connId)
+	connect, _ := connector.(iface.IConnector)
+	if connect == nil {
+		return errors.New("invalid connector")
+	}
+
+	log.Printf("example.cbForConnected, bucketId:%v, connId:%v\n", bucketId, connect.GetConnId())
 	return nil
 }
 

@@ -30,7 +30,7 @@ type (
 
 		//cb func for websocket
 		CBForGenConnId func() int64
-		CBForConnected func(router interface{}, bucketId int, connId int64) error
+		CBForConnected func(router interface{}, bucketId int, connector interface{}) error
 		CBForClosed    func(router interface{}, bucketId int, connId int64) error
 		CBForRead      func(router interface{}, bucketId int, connId int64, messageType int, data interface{}) error
 	}
@@ -46,7 +46,7 @@ type (
 		//cb func for websocket
 		CBForGenConnId   func() int64
 		CBForVerifyGroup func(conn *websocket.Conn, groupObj interface{}, groupId int64) error
-		CBForConnected   func(groupObj interface{}, groupId int64, connId int64) error
+		CBForConnected   func(groupObj interface{}, groupId int64, connector interface{}) error
 		CBForClosed      func(groupObj interface{}, groupId int64, connId int64) error
 		CBForRead        func(groupObj interface{}, groupId int64, connId int64, messageType int, data interface{}) error
 	}

@@ -48,20 +48,25 @@ func cbForClosed(group interface{}, groupId int64, connId int64) error {
 }
 
 //cb for connected
-func cbForConnected(group interface{}, groupId int64, connId int64) error {
+func cbForConnected(group interface{}, groupId int64, connector interface{}) error {
 	groupObj, _ := group.(iface.IGroup)
 	if groupObj == nil {
 		return errors.New("invalid group obj")
 	}
+	connect, _ := connector.(iface.IConnector)
+	if connect == nil {
+		return errors.New("invalid connector")
+	}
+
 	//get origin connect and path para
-	conn, _ := groupObj.GetConn(connId)
-	pathParas := conn.GetUriParas()
-	queryParas := conn.GetUriQueryParas()
+	//conn, _ := groupObj.GetConn(connId)
+	pathParas := connect.GetUriParas()
+	queryParas := connect.GetUriQueryParas()
 	nameVal := queryParas.Get("name")
 	ageVal := queryParas.Get("age")
 
 	log.Printf("example.cbForConnected, groupId:%v, connId:%v, pathParas:%v, nameVal:%v, ageVal:%v\n",
-		groupId, connId, pathParas, nameVal, ageVal)
+		groupId, connect.GetConnId(), pathParas, nameVal, ageVal)
 	return nil
 }
 
