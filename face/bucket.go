@@ -286,7 +286,7 @@ func (f *Bucket) AddConn(connId int64, conn *websocket.Conn, timeouts ...time.Du
 
 	//check and call the connected cb of outside
 	if f.conf != nil && f.conf.CBForConnected != nil {
-		f.conf.CBForConnected(f.router, f.bucketId, connId)
+		f.conf.CBForConnected(f.router, f.bucketId, connector)
 	}
 
 	//sync into bucket map with locker

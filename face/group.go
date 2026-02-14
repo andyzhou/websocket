@@ -232,7 +232,7 @@ func (f *Group) AddConn(connId int64, conn *websocket.Conn, timeouts ...time.Dur
 		f.Unlock()
 		//check and call the connected cb of outside
 		if f.conf != nil && f.conf.CBForConnected != nil {
-			f.conf.CBForConnected(f, f.groupId, connId)
+			f.conf.CBForConnected(f, f.groupId, connector)
 		}
 	}()
 	f.connMap[connId] = connector
