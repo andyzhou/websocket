@@ -23,14 +23,13 @@ import (
 
 //face info
 type Server struct {
-	port          int
-	hsm           *http.ServeMux //mux http server
-	router        *mux.Router
-	routerMap     map[string]iface.IRouter  //persistent routers, uri -> IRouter
-	dynamicMap    map[string]iface.IDynamic //dynamic groups, uri -> IDynamic
+	port       int
+	hsm        *http.ServeMux //mux http server
+	router     *mux.Router
+	routerMap  map[string]iface.IRouter  //persistent routers, uri -> IRouter
+	dynamicMap map[string]iface.IDynamic //dynamic groups, uri -> IDynamic
 	//wg            sync.WaitGroup
-	dynamicLocker sync.RWMutex
-	sync.RWMutex
+	locker 	   sync.RWMutex
 }
 
 //construct
@@ -47,16 +46,14 @@ func NewServer() *Server {
 //quit
 func (f *Server) Quit() {
 	//force close router
-	f.Lock()
-	defer f.Unlock()
+	f.locker.Lock()
+	defer f.locker.Unlock()
 	for k, v := range f.routerMap {
 		v.Quit()
 		delete(f.routerMap, k)
 	}
 
 	//force close dynamic groups
-	f.dynamicLocker.Lock()
-	defer f.dynamicLocker.Unlock()
 	for k, v := range f.dynamicMap {
 		v.Quit()
 		delete(f.dynamicMap, k)
@@ -84,15 +81,15 @@ func (f *Server) Start(port int) error {
 
 //get all routers
 func (f *Server) GetAllRouters() map[string]iface.IRouter {
-	f.RLock()
-	defer f.RUnlock()
+	f.locker.RLock()
+	defer f.locker.RUnlock()
 	return f.routerMap
 }
 
 //get all dynamics
 func (f *Server) GetAllDynamics() map[string]iface.IDynamic {
-	f.dynamicLocker.RLocker()
-	defer f.dynamicLocker.RUnlock()
+	f.locker.RLock()
+	defer f.locker.RUnlock()
 	return f.dynamicMap
 }
 
@@ -104,8 +101,8 @@ func (f *Server) GetRouter(uri string) (iface.IRouter, error) {
 	}
 
 	//get by uri with locker
-	f.RLock()
-	defer f.RUnlock()
+	f.locker.RLock()
+	defer f.locker.RUnlock()
 	v, ok := f.routerMap[uri]
 	if !ok || v == nil {
 		return nil, errors.New("no such router")
@@ -121,8 +118,8 @@ func (f *Server) GetDynamic(uri string) (iface.IDynamic, error) {
 	}
 
 	//get by uri with locker
-	f.dynamicLocker.RLock()
-	defer f.dynamicLocker.RUnlock()
+	f.locker.RLock()
+	defer f.locker.RUnlock()
 	v, ok := f.dynamicMap[uri]
 	if !ok || v == nil {
 		return nil, errors.New("no such dynamic")
@@ -154,8 +151,8 @@ func (f *Server) RegisterDynamic(cfg *gvar.GroupConf) (iface.IDynamic, error) {
 	f.router.Handle(uriWithPathPara, websocket.Handler(subDynamic.Entry))
 
 	//sync into running map with locker
-	f.Lock()
-	defer f.Unlock()
+	f.locker.Lock()
+	defer f.locker.Unlock()
 	f.dynamicMap[cfg.Uri] = subDynamic
 	return subDynamic, nil
 }
@@ -180,8 +177,8 @@ func (f *Server) RegisterRouter(cfg *gvar.RouterConf) error {
 	f.router.Handle(cfg.Uri, websocket.Handler(subRouter.Entry))
 
 	//sync into running map with locker
-	f.Lock()
-	defer f.Unlock()
+	f.locker.Lock()
+	defer f.locker.Unlock()
 	f.routerMap[cfg.Uri] = subRouter
 	return nil
 }

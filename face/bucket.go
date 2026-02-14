@@ -34,8 +34,7 @@ type Bucket struct {
 	writeChan      chan gvar.MsgData
 	writeCloseChan chan bool
 	opts           int64
-	ownerLock      sync.RWMutex
-	sync.RWMutex
+	locker         sync.RWMutex
 	Util
 }
 
@@ -62,8 +61,8 @@ func (f *Bucket) Quit() {
 	}
 
 	//force close with locker
-	f.Lock()
-	defer f.Unlock()
+	f.locker.Lock()
+	defer f.locker.Unlock()
 	for _, v := range f.connMap {
 		if v != nil {
 			v.Close()
@@ -113,8 +112,8 @@ func (f *Bucket) SetOwner(connId, ownerId int64) error {
 	connector.SetOwnerId(ownerId)
 
 	//set owner and conn id
-	f.ownerLock.Lock()
-	defer f.ownerLock.Unlock()
+	f.locker.Lock()
+	defer f.locker.Unlock()
 	f.connOwnerMap[ownerId] = connId
 	return nil
 }
@@ -134,15 +133,13 @@ func (f *Bucket) CloseConn(connId int64) error {
 	}
 
 	//remove conn from map
-	f.Lock()
+	f.locker.Lock()
 	delete(f.connMap, connId)
-	f.Unlock()
 
 	if connector.GetOwnerId() > 0 {
-		f.ownerLock.Lock()
 		delete(f.connOwnerMap, connector.GetOwnerId())
-		f.ownerLock.Unlock()
 	}
+	f.locker.Unlock()
 
 	//atomic opt
 	atomic.AddInt64(&f.opts, 1)
@@ -181,15 +178,13 @@ func (f *Bucket) RemoveConn(connId int64) (iface.IConnector, error) {
 	}
 
 	//remove conn from map
-	f.Lock()
+	f.locker.Lock()
 	delete(f.connMap, connId)
-	f.Unlock()
 
 	if connector.GetOwnerId() > 0 {
-		f.ownerLock.Lock()
 		delete(f.connOwnerMap, connector.GetOwnerId())
-		f.ownerLock.Unlock()
 	}
+	f.locker.Unlock()
 
 	//atomic opt
 	atomic.AddInt64(&f.opts, 1)
@@ -219,8 +214,8 @@ func (f *Bucket) GetConnByOwnerId(ownerId int64) (iface.IConnector, error) {
 	}
 
 	//loop map to found
-	f.RLock()
-	defer f.RUnlock()
+	f.locker.RLocker()
+	defer f.locker.RUnlock()
 	for _, v := range f.connMap {
 		if v != nil && v.GetOwnerId() == ownerId {
 			targetConnector = v
@@ -238,8 +233,8 @@ func (f *Bucket) GetConn(connId int64) (iface.IConnector, error) {
 	}
 
 	//get connect by id
-	f.RLock()
-	defer f.RUnlock()
+	f.locker.Lock()
+	defer f.locker.Unlock()
 	conn, ok := f.connMap[connId]
 	if !ok || conn == nil {
 		return nil, errors.New("no such connector")
@@ -255,8 +250,8 @@ func (f *Bucket) AttachConn(connector iface.IConnector) error {
 	}
 
 	//sync into bucket map with locker
-	f.Lock()
-	defer f.Unlock()
+	f.locker.Lock()
+	defer f.locker.Unlock()
 	connector.SetConfId(f.bucketId, 0)
 	f.connMap[connector.GetConnId()] = connector
 	return nil
@@ -289,15 +284,15 @@ func (f *Bucket) AddConn(connId int64, conn *websocket.Conn, timeouts ...time.Du
 	//init new connector
 	connector := NewConnector(connConf, connId, conn, timeouts...)
 
-	//sync into bucket map with locker
-	f.Lock()
-	f.connMap[connId] = connector
-	f.Unlock()
-
 	//check and call the connected cb of outside
 	if f.conf != nil && f.conf.CBForConnected != nil {
 		f.conf.CBForConnected(f.router, f.bucketId, connId)
 	}
+
+	//sync into bucket map with locker
+	f.locker.Lock()
+	defer f.locker.Unlock()
+	f.connMap[connId] = connector
 	return nil
 }
 
@@ -313,8 +308,8 @@ func (f *Bucket) getConnIdByOwnerId(ownerId int64) (int64, error) {
 	}
 
 	//get connect id with locker
-	f.ownerLock.RLock()
-	defer f.ownerLock.RUnlock()
+	f.locker.RLock()
+	defer f.locker.RUnlock()
 	v, ok := f.connOwnerMap[ownerId]
 	if ok && v > 0 {
 		return v, nil
@@ -332,9 +327,8 @@ func (f *Bucket) subWriteOpt(data *gvar.MsgData) error {
 	//check byte data
 	byteData, _ := data.Data.([]byte)
 
-	f.Lock()
-	defer f.Unlock()
-
+	f.locker.Lock()
+	defer f.locker.Unlock()
 	//send by owner ids
 	if data.OwnerIds != nil && len(data.OwnerIds) > 0 {
 		for _, ownerId := range data.OwnerIds {
@@ -434,8 +428,8 @@ func (f *Bucket) removeConnect(connId int64) {
 	if connId <= 0 {
 		return
 	}
-	f.Lock()
-	defer f.Unlock()
+	f.locker.Lock()
+	defer f.locker.Unlock()
 	delete(f.connMap, connId)
 	if len(f.connMap) <= 0 {
 		newConnMap := map[int64]iface.IConnector{}
@@ -445,21 +439,19 @@ func (f *Bucket) removeConnect(connId int64) {
 
 //rebuild
 func (f *Bucket) rebuild() {
-	f.Lock()
+	f.locker.Lock()
 	newConnMap := map[int64]iface.IConnector{}
 	for k, v := range f.connMap {
 		newConnMap[k] = v
 	}
 	f.connMap = newConnMap
-	f.Unlock()
 
-	f.ownerLock.Lock()
 	newOwnerMap := map[int64]int64{}
 	for k, v := range f.connOwnerMap {
 		newOwnerMap[k] = v
 	}
 	f.connOwnerMap = newOwnerMap
-	f.ownerLock.Unlock()
+	f.locker.Unlock()
 
 	atomic.StoreInt64(&f.opts, 0)
 

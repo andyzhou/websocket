@@ -3,7 +3,6 @@ package face
 import (
 	"errors"
 	"fmt"
-	"github.com/andyzhou/websocket/define"
 	"io"
 	"log"
 	"net"
@@ -11,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/andyzhou/websocket/define"
 	"github.com/andyzhou/websocket/gvar"
 	"github.com/gorilla/mux"
 	"golang.org/x/net/websocket"
