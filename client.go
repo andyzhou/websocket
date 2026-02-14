@@ -222,7 +222,7 @@ func (c *Client) handleError(err error) {
 	}
 
 	c.reconnectCount++
-	if c.reconnectCount > c.reconnectMax {
+	if c.reconnectMax > 0 && c.reconnectCount > c.reconnectMax {
 		log.Println("max reconnect reached")
 		c.Close()
 		return
