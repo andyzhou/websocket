@@ -135,6 +135,11 @@ func (f *Group) CloseConn(connId int64) error {
 		needRebuildNewMap = true
 	}
 
+	//check and call the closed cb of outside
+	if f.conf != nil && f.conf.CBForClosed != nil {
+		f.conf.CBForClosed(f, f.groupId, connId)
+	}
+
 	//get conn obj
 	connector, _ := f.GetConn(connId)
 	if connector != nil {
@@ -148,11 +153,6 @@ func (f *Group) CloseConn(connId int64) error {
 		delete(f.connOwnerMap, connector.GetOwnerId())
 	}
 	f.Unlock()
-
-	//check and call the closed cb of outside
-	if f.conf != nil && f.conf.CBForClosed != nil {
-		f.conf.CBForClosed(f, f.groupId, connId)
-	}
 
 	if needRebuildNewMap || len(f.connMap) <= 0 {
 		f.rebuild()

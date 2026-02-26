@@ -125,6 +125,11 @@ func (f *Bucket) CloseConn(connId int64) error {
 		return errors.New("invalid parameter")
 	}
 
+	//check and call the closed cb of outside
+	if f.conf != nil && f.conf.CBForClosed != nil {
+		f.conf.CBForClosed(f.router, f.bucketId, connId)
+	}
+
 	//get conn by id
 	connector, _ := f.GetConn(connId)
 	if connector != nil {
@@ -143,11 +148,6 @@ func (f *Bucket) CloseConn(connId int64) error {
 
 	//atomic opt
 	atomic.AddInt64(&f.opts, 1)
-
-	//check and call the closed cb of outside
-	if f.conf != nil && f.conf.CBForClosed != nil {
-		f.conf.CBForClosed(f.router, f.bucketId, connId)
-	}
 
 	//hit gc rate
 	gcRate := rand.Intn(define.FullPercent)

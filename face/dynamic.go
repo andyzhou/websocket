@@ -167,7 +167,7 @@ func (f *Dynamic) Entry(conn *websocket.Conn) {
 	//check group id para
 	groupId, err := f.getAndVerifyGroupId(conn)
 	if err != nil || groupId <= 0 {
-		log.Printf("group %v, verify group id frailed", groupId)
+		log.Printf("group %v, verify group id failed", groupId)
 		return
 	}
 
