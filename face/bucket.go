@@ -133,6 +133,12 @@ func (f *Bucket) CloseConn(connId int64) error {
 	//get conn by id
 	connector, _ := f.GetConn(connId)
 	if connector != nil {
+		connOwnerId := connector.GetOwnerId()
+		if connOwnerId > 0 {
+			f.locker.Lock()
+			delete(f.connOwnerMap, connOwnerId)
+			f.locker.Unlock()
+		}
 		//force close connect
 		connector.Close()
 	}
@@ -140,10 +146,6 @@ func (f *Bucket) CloseConn(connId int64) error {
 	//remove conn from map
 	f.locker.Lock()
 	delete(f.connMap, connId)
-
-	if connector.GetOwnerId() > 0 {
-		delete(f.connOwnerMap, connector.GetOwnerId())
-	}
 	f.locker.Unlock()
 
 	//atomic opt
