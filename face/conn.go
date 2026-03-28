@@ -401,7 +401,7 @@ func (f *Connector) writeProcess() {
 		case data, isOk = <- f.writeChan:
 			{
 				if isOk && data != nil {
-					f.writePureData(data)
+					f.Write(data, f.conf.MessageType)
 				}
 			}
 		case <- f.closeChan:
