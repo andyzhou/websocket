@@ -40,7 +40,7 @@ type Connector struct {
 	activeTime       int64
 	conn             *websocket.Conn //origin conn reference
 	propertyMap      map[string]interface{}
-	writeChan        chan []byte //write byte chan
+	writeChan        chan interWriteData //write byte chan
 	closeChan        chan bool
 	messageChan      chan interface{} //async message chan
 	messageCloseChan chan bool
@@ -56,6 +56,11 @@ type Connector struct {
 	Util
 }
 
+type interWriteData struct {
+	data 		[]byte
+	directWrite bool
+}
+
 //construct
 //timeouts=> readTimeout, writeTimeout
 func NewConnector(
@@ -67,7 +72,7 @@ func NewConnector(
 		conf:             conf,
 		connId:           connId,
 		conn:             conn,
-		writeChan:        make(chan []byte, define.ConnWriteChanSize),
+		writeChan:        make(chan interWriteData, define.ConnWriteChanSize),
 		closeChan:        make(chan bool, 1),
 		propertyMap:      map[string]interface{}{},
 		messageChan:      make(chan interface{}, define.MessageChanSize),
@@ -209,11 +214,20 @@ func (f *Connector) GetConn() *websocket.Conn {
 }
 
 //push to write queue
-func (f *Connector) QueueWrite(data []byte) error {
+//if directWrite is true, use low tcp to write bytes data
+//or use json MessageTypeOfOctet mod
+func (f *Connector) QueueWrite(data []byte, directWrites ...bool) error {
+	var (
+		directWrite bool
+	)
 	//check
 	if data == nil {
 		return errors.New("invalid parameter")
 	}
+	if len(directWrites) > 0 {
+		directWrite = directWrites[0]
+	}
+
 	isClosed, err := f.IsChanClosed(f.writeChan)
 	if err != nil {
 		return err
@@ -223,7 +237,11 @@ func (f *Connector) QueueWrite(data []byte) error {
 	}
 
 	//write to chan
-	f.writeChan <- data
+	iwd := interWriteData {
+		data: data,
+		directWrite: directWrite,
+	}
+	f.writeChan <- iwd
 	return nil
 }
 
@@ -387,7 +405,7 @@ func (f *Connector) writePureData(data []byte) error {
 //write process
 func (f *Connector) writeProcess() {
 	var (
-		data []byte
+		iwd interWriteData
 		isOk bool
 	)
 	//defer opt
@@ -398,10 +416,14 @@ func (f *Connector) writeProcess() {
 	//loop
 	for {
 		select {
-		case data, isOk = <- f.writeChan:
+		case iwd, isOk = <- f.writeChan:
 			{
-				if isOk && data != nil {
-					f.Write(data, f.conf.MessageType)
+				if isOk && &iwd != nil {
+					if iwd.directWrite {
+						f.writePureData(iwd.data)
+					}else{
+						f.Write(iwd.data, f.conf.MessageType)
+					}
 				}
 			}
 		case <- f.closeChan:

@@ -29,7 +29,7 @@ type IConnector interface {
 	SetProp(kind string, val interface{}) error
 
 	//read and write
-	QueueWrite(data []byte) error
+	QueueWrite(data []byte, directWrites ...bool) error
 	Write(data interface{}, messageTypes ...int) error
 	Read(messageTypes ...int) (interface{}, error)
 
