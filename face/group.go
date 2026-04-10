@@ -240,13 +240,12 @@ func (f *Group) CloneConn(connector iface.IConnector) error {
 	connId := connector.GetConnId()
 	ownerId := connector.GetOwnerId()
 
-	//get old connect
-	oldConnector, _ := f.GetConn(connId)
-	if oldConnector != nil {
-		return errors.New("had old connect by id")
+	//re-check again
+	if connId <= 0 {
+		return errors.New("no connect id")
 	}
 
-	//add new connect
+	//overwrite new connect
 	err := f.AddConn(connId, connector.GetConn())
 	if err != nil {
 		return err
