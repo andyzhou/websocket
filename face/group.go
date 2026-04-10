@@ -160,6 +160,35 @@ func (f *Group) CloseConn(connId int64) error {
 	return nil
 }
 
+//remove connector by id
+//return old connector
+func (f *Group) RemoveConn(connId int64) (iface.IConnector, error) {
+	//check
+	if connId <= 0 {
+		return nil, errors.New("invalid parameter")
+	}
+
+	//get conn obj
+	connector, err := f.GetConn(connId)
+	if err != nil || connector == nil {
+		return nil, err
+	}
+
+	//get connect owner id
+	ownerId := connector.GetOwnerId()
+
+	//remove opt with locker
+	f.Lock()
+	defer f.Unlock()
+	if ownerId > 0 {
+		delete(f.connOwnerMap, ownerId)
+	}
+	delete(f.connMap, connId)
+
+	//return old connector for reusing
+	return connector, nil
+}
+
 //get connector by owner id
 func (f *Group) GetConnByOwnerId(ownerId int64) (iface.IConnector, error) {
 	//check
@@ -198,6 +227,38 @@ func (f *Group) GetConn(connId int64) (iface.IConnector, error) {
 		return nil, errors.New("no such connector")
 	}
 	return v, nil
+}
+
+//clone old connector
+func (f *Group) CloneConn(connector iface.IConnector) error {
+	//check
+	if connector == nil {
+		return errors.New("invalid parameter")
+	}
+
+	//get key data
+	connId := connector.GetConnId()
+	ownerId := connector.GetOwnerId()
+
+	//get old connect
+	oldConnector, _ := f.GetConn(connId)
+	if oldConnector != nil {
+		return errors.New("had old connect by id")
+	}
+
+	//add new connect
+	err := f.AddConn(connId, connector.GetConn())
+	if err != nil {
+		return err
+	}
+
+	//set owner
+	if ownerId > 0 {
+		f.Lock()
+		defer f.Unlock()
+		f.connOwnerMap[ownerId] = connId
+	}
+	return nil
 }
 
 //add new connect

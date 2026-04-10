@@ -22,8 +22,10 @@ type IGroup interface {
 	//for connect
 	SetOwner(connId, ownerId int64) error
 	CloseConn(connId int64) error
+	RemoveConn(connId int64) (IConnector, error)
 	GetConnByOwnerId(ownerId int64) (IConnector, error)
 	GetConn(connId int64) (IConnector, error)
+	CloneConn(connector IConnector) error
 	AddConn(connId int64, conn *websocket.Conn, timeouts ...time.Duration) error
 }
 
