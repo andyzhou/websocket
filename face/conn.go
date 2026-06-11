@@ -41,6 +41,7 @@ type Connector struct {
 	conn             *websocket.Conn //origin conn reference
 	propertyMap      map[string]interface{}
 	writeChan        chan interWriteData //write byte chan
+	writeJsonChan    chan interface{}
 	closeChan        chan bool
 	messageChan      chan interface{} //async message chan
 	messageCloseChan chan bool
@@ -57,8 +58,8 @@ type Connector struct {
 }
 
 type interWriteData struct {
-	data 		[]byte
-	directWrite bool
+	data 		interface{}
+	messageType int
 }
 
 //construct
@@ -73,7 +74,8 @@ func NewConnector(
 		connId:           connId,
 		conn:             conn,
 		writeChan:        make(chan interWriteData, define.ConnWriteChanSize),
-		closeChan:        make(chan bool, 1),
+		writeJsonChan:    make(chan interface{}, define.ConnWriteChanSize),
+		closeChan:        make(chan bool, 2),
 		propertyMap:      map[string]interface{}{},
 		messageChan:      make(chan interface{}, define.MessageChanSize),
 		messageCloseChan: make(chan bool, 1),
@@ -216,16 +218,16 @@ func (f *Connector) GetConn() *websocket.Conn {
 //push to write queue
 //if directWrite is true, use low tcp to write bytes data
 //or use json MessageTypeOfOctet mod
-func (f *Connector) QueueWrite(data []byte, directWrites ...bool) error {
+func (f *Connector) QueueWrite(data interface{}, messageTypes ...int) error {
 	var (
-		directWrite bool
+		messageType int
 	)
 	//check
 	if data == nil {
 		return errors.New("invalid parameter")
 	}
-	if len(directWrites) > 0 {
-		directWrite = directWrites[0]
+	if len(messageTypes) > 0 {
+		messageType = messageTypes[0]
 	}
 
 	isClosed, err := f.IsChanClosed(f.writeChan)
@@ -239,7 +241,7 @@ func (f *Connector) QueueWrite(data []byte, directWrites ...bool) error {
 	//write to chan
 	iwd := interWriteData {
 		data: data,
-		directWrite: directWrite,
+		messageType: messageType,
 	}
 	f.writeChan <- iwd
 	return nil
@@ -283,6 +285,9 @@ func (f *Connector) Write(data interface{}, messageTypes ...int) error {
 		{
 			//json format
 			err = websocket.JSON.Send(conn, data)
+			if err != nil {
+				log.Println(err)
+			}
 		}
 	case gvar.MessageTypeOfOctet:
 		fallthrough
@@ -402,7 +407,6 @@ func (f *Connector) writePureData(data []byte) error {
 	return err
 }
 
-//write process
 func (f *Connector) writeProcess() {
 	var (
 		iwd interWriteData
@@ -419,11 +423,7 @@ func (f *Connector) writeProcess() {
 		case iwd, isOk = <- f.writeChan:
 			{
 				if isOk && &iwd != nil {
-					if iwd.directWrite {
-						f.writePureData(iwd.data)
-					}else{
-						f.Write(iwd.data, f.conf.MessageType)
-					}
+					f.Write(iwd.data, iwd.messageType)
 				}
 			}
 		case <- f.closeChan:
