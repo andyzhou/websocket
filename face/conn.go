@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/url"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/andyzhou/websocket/define"
@@ -51,6 +52,7 @@ type Connector struct {
 	readDeadline     time.Time
 	writeDeadline    time.Time
 	closeOnce        sync.Once
+	closed 			 atomic.Bool
 	propLocker       sync.RWMutex
 	connLocker       sync.RWMutex
 	deadlineLocker   sync.RWMutex
@@ -88,7 +90,9 @@ func NewConnector(
 //close
 func (f *Connector) Close() {
 	f.closeOnce.Do(func() {
+		f.closed.Store(true)
 		close(f.messageCloseChan)
+		close(f.writeChan)
 		f.connLocker.Lock()
 		defer f.connLocker.Unlock()
 		if f.conn != nil {
@@ -221,30 +225,54 @@ func (f *Connector) GetConn() *websocket.Conn {
 func (f *Connector) QueueWrite(data interface{}, messageTypes ...int) error {
 	var (
 		messageType int
+		m any = nil
+		err error
 	)
 	//check
 	if data == nil {
 		return errors.New("invalid parameter")
 	}
+
+	// 使用 atomic 检查
+	if f.closed.Load() {
+		return fmt.Errorf("connect %v write chan is closed", f.connId)
+	}
+
 	if len(messageTypes) > 0 {
 		messageType = messageTypes[0]
 	}
 
-	isClosed, err := f.IsChanClosed(f.writeChan)
-	if err != nil {
-		return err
-	}
-	if isClosed {
-		return fmt.Errorf("connect %v write chan is closed", f.connId)
-	}
+	// 用defer捕获可能的panic
+	defer func() {
+		if r := recover(); r != m {
+			err = fmt.Errorf("write to closed channel: %v", r)
+		}
+	}()
+
+	//isClosed, err := f.IsChanClosed(f.writeChan)
+	//if err != nil {
+	//	return err
+	//}
+	//if isClosed {
+	//	return fmt.Errorf("connect %v write chan is closed", f.connId)
+	//}
 
 	//write to chan
 	iwd := interWriteData {
 		data: data,
 		messageType: messageType,
 	}
-	f.writeChan <- iwd
-	return nil
+
+	// 即使这里检查通过，仍可能被关闭
+	// 但结合 closeOnce，可以保证不会 panic
+	select {
+	case f.writeChan <- iwd:
+		return nil
+	default:
+		// channel 可能已满或已关闭
+		return fmt.Errorf("write channel unavailable")
+	}
+	return err
 }
 
 //send message with timeout
