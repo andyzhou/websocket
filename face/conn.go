@@ -442,7 +442,9 @@ func (f *Connector) writeProcess() {
 	)
 	//defer opt
 	defer func() {
-		close(f.writeChan)
+		if !f.closed.Load() {
+			close(f.writeChan)
+		}
 	}()
 
 	//loop
@@ -471,8 +473,10 @@ func (f *Connector) readProcess() {
 		if pErr := recover(); pErr != m {
 			log.Printf("connect %v read process panic, err:%v\n", f.connId, pErr)
 		}
-		//close message chan
-		close(f.messageChan)
+		if !f.closed.Load() {
+			//close message chan
+			close(f.messageChan)
+		}
 	}()
 
 	//start async message worker
