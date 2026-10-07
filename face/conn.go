@@ -440,12 +440,12 @@ func (f *Connector) writeProcess() {
 		iwd interWriteData
 		isOk bool
 	)
-	//defer opt
-	defer func() {
-		if !f.closed.Load() {
-			close(f.writeChan)
-		}
-	}()
+	////defer opt
+	//defer func() {
+	//	if !f.closed.Load() {
+	//		close(f.writeChan)
+	//	}
+	//}()
 
 	//loop
 	for {
@@ -485,7 +485,8 @@ func (f *Connector) readProcess() {
 	//read process loop
 	for {
 		if !f.isConnected() {
-			continue
+			//fix empty loop when lost connect
+			return
 		}
 		data, err := f.Read(f.conf.MessageType)
 		if err != nil {
@@ -493,14 +494,14 @@ func (f *Connector) readProcess() {
 				if f.conf.CBForClosed != nil {
 					f.conf.CBForClosed(f.GetConnId())
 				}
-				break
+				return
 			}
 			if netErr, sok := err.(net.Error); sok && netErr.Timeout() {
 				//read timeout, but continue
 				continue
 			}
-			//other error, still continue
-			continue
+			//other error, just return
+			return
 		}
 
 		//async process message
