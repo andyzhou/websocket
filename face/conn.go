@@ -88,18 +88,29 @@ func NewConnector(
 }
 
 //close
+//close
 func (f *Connector) Close() {
 	f.closeOnce.Do(func() {
 		f.closed.Store(true)
+
+		// 1) 先通知各 loop 退出，避免 chan 关闭后空转
 		close(f.messageCloseChan)
-		close(f.writeChan)
+
+		// 2) 关闭底层连接（在锁内），并关闭 closeChan
 		f.connLocker.Lock()
-		defer f.connLocker.Unlock()
 		if f.conn != nil {
 			close(f.closeChan)
 			f.conn.Close()
 			f.conn = nil
+		} else {
+			// 即使 conn 为 nil，也要关 closeChan，保证 writeProcess 能退出
+			// 注意：closeChan 只会被 close 一次（closeOnce 保护）
+			close(f.closeChan)
 		}
+		f.connLocker.Unlock()
+
+		// 3) 最后关闭 writeChan（此时 writeProcess 已能通过 closeChan 退出）
+		close(f.writeChan)
 	})
 }
 
@@ -178,16 +189,31 @@ func (f *Connector) CloseWithMessage(message string) error {
 		return errors.New("connect has closed")
 	}
 
-	//write message before close it
+	// 写消息（只写一次，用 once 单独控制写消息这个动作）
 	f.closeOnce.Do(func() {
-		close(f.messageCloseChan)
+		f.closed.Store(true)
+
+		// 写最后一条消息
 		f.connLocker.Lock()
-		defer f.connLocker.Unlock()
 		if f.conn != nil {
 			f.conn.Write([]byte(message))
+		}
+		f.connLocker.Unlock()
+
+		// 复用统一的关闭流程
+		close(f.messageCloseChan)
+
+		f.connLocker.Lock()
+		if f.conn != nil {
+			close(f.closeChan)
 			f.conn.Close()
 			f.conn = nil
+		} else {
+			close(f.closeChan)
 		}
+		f.connLocker.Unlock()
+
+		close(f.writeChan)
 	})
 	return nil
 }
@@ -222,7 +248,41 @@ func (f *Connector) GetConn() *websocket.Conn {
 //push to write queue
 //if directWrite is true, use low tcp to write bytes data
 //or use json MessageTypeOfOctet mod
-func (f *Connector) QueueWrite(data interface{}, messageTypes ...int) error {
+func (f *Connector) QueueWrite(data interface{}, messageTypes ...int) (err error) {
+	var (
+		messageType int
+		m           any = nil
+	)
+	if data == nil {
+		return errors.New("invalid parameter")
+	}
+	if f.closed.Load() {
+		return fmt.Errorf("connect %v write chan is closed", f.connId)
+	}
+	if len(messageTypes) > 0 {
+		messageType = messageTypes[0]
+	}
+
+	defer func() {
+		if r := recover(); r != m {
+			err = fmt.Errorf("write to closed channel: %v", r)
+		}
+	}()
+
+	iwd := interWriteData{
+		data:        data,
+		messageType: messageType,
+	}
+
+	select {
+	case f.writeChan <- iwd:
+		return nil
+	default:
+		return fmt.Errorf("write channel unavailable")
+	}
+}
+
+func (f *Connector) QueueWriteOld(data interface{}, messageTypes ...int) error {
 	var (
 		messageType int
 		m any = nil
@@ -330,6 +390,57 @@ func (f *Connector) Write(data interface{}, messageTypes ...int) error {
 
 //read message with timeout
 func (f *Connector) Read(messageTypes ...int) (interface{}, error) {
+	var (
+		messageType int
+		err         error
+		m           any
+	)
+	if messageTypes != nil && len(messageTypes) > 0 {
+		messageType = messageTypes[0]
+	}
+
+	defer func() {
+		f.updateActiveTime(time.Now().Unix())
+		if pErr := recover(); pErr != m {
+			log.Printf("connector.read panic, err:%v", pErr)
+		}
+	}()
+
+	f.connLocker.RLock()
+	if f.conn == nil {
+		f.connLocker.RUnlock()
+		return nil, errors.New("connect is nil")
+	}
+	conn := f.conn
+
+	f.deadlineLocker.RLock()
+	readDeadline := f.readDeadline
+	f.deadlineLocker.RUnlock()
+
+	// 仅当 deadline 已过期才重设，且 readTimeout 必须 > 0
+	if time.Now().After(readDeadline) && f.readTimeout > 0 {
+		f.deadlineLocker.Lock()
+		f.readDeadline = time.Now().Add(f.readTimeout)
+		_ = conn.SetReadDeadline(f.readDeadline)
+		f.deadlineLocker.Unlock()
+	}
+	f.connLocker.RUnlock()
+
+	switch messageType {
+	case gvar.MessageTypeOfJson:
+		var data interface{}
+		err = websocket.JSON.Receive(conn, &data)
+		return data, err
+	case gvar.MessageTypeOfOctet:
+		fallthrough
+	default:
+		var data []byte
+		err = websocket.Message.Receive(conn, &data)
+		return data, err
+	}
+}
+
+func (f *Connector) ReadOld(messageTypes ...int) (interface{}, error) {
 	var (
 		messageType int
 		err error
@@ -452,7 +563,10 @@ func (f *Connector) writeProcess() {
 		select {
 		case iwd, isOk = <- f.writeChan:
 			{
-				if isOk && &iwd != nil {
+				if !isOk {
+					return
+				}
+				if &iwd != nil {
 					f.Write(iwd.data, iwd.messageType)
 				}
 			}
@@ -466,6 +580,66 @@ func (f *Connector) writeProcess() {
 
 //read process
 func (f *Connector) readProcess() {
+	var (
+		m                any = nil
+		timeoutCount     int
+		maxTimeoutCount  = 100   // 连续超时阈值，可按需调整
+	)
+	defer func() {
+		if pErr := recover(); pErr != m {
+			log.Printf("connect %v read process panic, err:%v\n", f.connId, pErr)
+		}
+		if !f.closed.Load() {
+			// 非主动关闭时，确保清理（关闭所有 chan + conn）
+			f.Close()
+		}
+	}()
+
+	//start async message worker
+	go f.asyncMessageWorker()
+
+	for {
+		if !f.isConnected() {
+			return
+		}
+
+		data, err := f.Read(f.conf.MessageType)
+		if err != nil {
+			if err == io.EOF {
+				if f.conf.CBForClosed != nil {
+					f.conf.CBForClosed(f.GetConnId())
+				}
+				return
+			}
+			if netErr, sok := err.(net.Error); sok && netErr.Timeout() {
+				timeoutCount++
+				// 连续超时过多，判定连接已死，主动关闭
+				if timeoutCount >= maxTimeoutCount {
+					if f.conf.CBForClosed != nil {
+						f.conf.CBForClosed(f.GetConnId())
+					}
+					return
+				}
+				// 退避，避免立即超时空转
+				time.Sleep(10 * time.Millisecond)
+				continue
+			}
+			// 其他错误（含 use of closed network connection），退出
+			return
+		}
+
+		// 读到数据，重置超时计数
+		timeoutCount = 0
+
+		select {
+		case f.messageChan <- data:
+		default:
+			log.Printf("connector %v message queue full, dropping message", f.connId)
+		}
+	}
+}
+
+func (f *Connector) readProcessOld() {
 	var (
 		m any = nil
 	)
@@ -516,6 +690,41 @@ func (f *Connector) readProcess() {
 
 //async message worker
 func (f *Connector) asyncMessageWorker() {
+	var (
+		data interface{}
+		isOk bool
+		m    any = nil
+	)
+	defer func() {
+		if r := recover(); r != m {
+			log.Printf("asyncMessageWorker panic: %v", r)
+		}
+	}()
+
+	for {
+		select {
+		case data, isOk = <-f.messageChan:
+			if !isOk {
+				// messageChan 已关闭，退出，避免空转
+				return
+			}
+			if f.conf != nil && f.conf.CBForRead != nil {
+				func(connId int64, messageType int, data interface{}) {
+					defer func() {
+						if r := recover(); r != m {
+							log.Printf("CBForRead panic: %v", r)
+						}
+					}()
+					f.conf.CBForRead(connId, messageType, data)
+				}(f.GetConnId(), f.conf.MessageType, data)
+			}
+		case <-f.messageCloseChan:
+			return
+		}
+	}
+}
+
+func (f *Connector) asyncMessageWorkerOld() {
 	var(
 		data interface{}
 		isOk bool
